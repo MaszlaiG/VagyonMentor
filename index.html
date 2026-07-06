@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VagyonMentor</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header>
+  <div class="logo">Vagyon<span>Mentor</span></div>
+  <div style="display:flex;align-items:center;gap:12px">
+    <span id="logged-in-as" style="font-size:11.5px;color:var(--muted)"></span>
+    <button class="btn btn-secondary btn-sm" onclick="openDataModal()">💾 Adatok</button>
+    <button class="btn btn-secondary btn-sm" onclick="logout()">Kijelentkezés</button>
+    <div class="header-meta" id="header-date"></div>
+  </div>
+</header>
+
+<div class="nav-mobile-bar">
+  <button class="nav-toggle" id="nav-toggle" onclick="toggleNav()" aria-label="Menü megnyitása">
+    <span class="nav-toggle-icon" id="nav-toggle-icon">☰</span>
+    <span id="nav-current-label">Áttekintés</span>
+    <span class="nav-toggle-caret">▾</span>
+  </button>
+</div>
+
+<nav id="main-nav">
+  <button class="active" data-tab="dashboard" onclick="showTab('dashboard')">Áttekintés</button>
+  <button data-tab="watch" onclick="showTab('watch')">Interaktív figyelő</button>
+  <button data-tab="gold" onclick="showTab('gold')">Arany</button>
+  <button data-tab="pledge" onclick="showTab('pledge')">Zálog</button>
+  <button data-tab="portfolio" onclick="showTab('portfolio')">Részvény</button>
+  <button data-tab="crypto" onclick="showTab('crypto')">Kripto</button>
+  <button data-tab="loan" onclick="showTab('loan')">Hitel</button>
+  <button data-tab="services" onclick="showTab('services')">Szolgáltatások</button>
+</nav>
+
+<main>
+
+<div class="tab-content active" id="tab-dashboard">
+  <div style="margin-bottom:20px">
+    <div class="section-title" style="font-size:22px;margin-bottom:4px">Pénzügyi Áttekintés</div>
+    <div style="color:var(--muted);font-size:12px">Minden eszköz és kötelezettség egy helyen</div>
+  </div>
+
+  <div class="grid g3" style="margin-bottom:16px">
+    <div class="card card-stat-green">
+      <div class="card-title">Nettó Vagyon</div>
+      <div class="stat-value green" id="d-networth">0 Ft</div>
+      <div class="stat-sub">Összes eszköz − kötelezettség</div>
+    </div>
+    <div class="card card-stat-cyan">
+      <div class="card-title">Befektetett Eszközök Értéke</div>
+      <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
+        <div class="stat-value cyan" id="d-current-value">0 Ft</div>
+        <span id="d-invested-pct" style="font-size:13px;font-weight:600"></span>
+      </div>
+      <div class="stat-sub" id="d-invested-line">Befektetve: 0 Ft</div>
+    </div>
+    <div class="card card-stat-yellow">
+      <div class="card-title">Osztalék Ráta</div>
+      <div class="stat-value yellow" id="d-div-rate">0%</div>
+      <div class="stat-sub" id="d-div-rate-sub">A havi fix kiadások fedezete osztalékból</div>
+    </div>
+  </div>
+
+  <div class="grid g3" style="margin-bottom:24px">
+    <div class="card">
+      <div class="card-title">Vagyonmegoszlás</div>
+      <div class="donut-wrap">
+        <canvas id="donut-canvas" width="140" height="140"></canvas>
+        <div class="donut-legend" id="donut-legend"></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Gyors Státusz</div>
+      <div id="quick-status"></div>
+    </div>
+    <div class="card" style="border-color:rgba(245,158,11,0.4);box-shadow:0 0 0 1px rgba(245,158,11,0.15)">
+      <div class="card-title" style="color:var(--accent3)">Havi Kiadás</div>
+      <div id="dash-monthly"></div>
+    </div>
+  </div>
+</div>
+
+<div class="tab-content" id="tab-watch">
+  <div style="margin-bottom:16px">
+    <div class="section-title" style="font-size:22px;margin-bottom:4px">Interaktív Figyelő</div>
+    <div style="color:var(--muted);font-size:12px">Élő követés: kripto, részvények és befektetési arany</div>
+  </div>
+
+  <div id="watch-refresh-bar"></div>
+
+  <div class="section-title" style="font-size:14px;margin-bottom:12px">Kripto</div>
+  <div id="dash-crypto" class="grid g4" style="margin-bottom:24px"></div>
+
+  <div class="section-title" style="font-size:14px;margin-bottom:12px">Részvények</div>
+  <div id="dash-stocks" class="grid g4" style="margin-bottom:24px"></div>
+
+  <div class="section-title" style="font-size:14px;margin-bottom:12px">Befektetési arany</div>
+  <div id="dash-gold" class="grid g4"></div>
+</div>
+
+<div class="tab-content" id="tab-portfolio">
+  <div class="section-header">
+    <div class="section-title">Részvényportfólió</div>
+    <button class="btn" onclick="openModal('stock-modal')">+ Részvény rögzítése</button>
+  </div>
+
+  <div>
+    <div>
+      <div class="grid g4" style="margin-bottom:16px">
+        <div class="card card-stat-purple">
+          <div class="card-title">Befektetett</div>
+          <div class="stat-value purple" id="st-sum-invested">0 Ft</div>
+        </div>
+        <div class="card card-stat-cyan">
+          <div class="card-title">Jelenlegi érték</div>
+          <div class="stat-value cyan" id="st-sum-current">0 Ft</div>
+        </div>
+        <div class="card card-stat-dark" id="st-sum-pl-card">
+          <div class="card-title">P&amp;L</div>
+          <div class="stat-value" id="st-sum-pl">0 Ft</div>
+        </div>
+        <div class="card card-stat-yellow">
+          <div class="card-title">Éves osztalék</div>
+          <div class="stat-value yellow" id="st-sum-div">0 Ft</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Portfólió</div>
+        <div id="stock-refresh-bar"></div>
+        <div class="scroll-table">
+          <table>
+            <thead><tr><th>Ticker</th><th>Vétel dátuma</th><th>Db</th><th>Vételár</th><th>Jelenlegi ár</th><th>Befektetett</th><th>Jelenlegi érték</th><th>P&amp;L</th><th>Éves Osztalék</th><th>Hozam %</th><th></th></tr></thead>
+            <tbody id="stock-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal" id="stock-modal" onclick="if(event.target===this)closeModal('stock-modal')">
+      <div class="modal-card">
+        <div class="modal-head">
+          <div class="section-title" style="font-size:18px">Részvény hozzáadása</div>
+          <button class="btn btn-secondary btn-sm" onclick="closeModal('stock-modal')">✕</button>
+        </div>
+        <div class="form-grid fg2" style="margin-bottom:12px">
+          <div>
+            <label>Ticker / Név</label>
+            <input type="text" id="st-ticker" placeholder="pl. AAPL">
+          </div>
+          <div>
+            <label>Deviza</label>
+            <select id="st-currency" onchange="updateStockLabels()">
+              <option value="HUF">HUF</option>
+              <option value="USD">USD</option>
+              <option value="EUR">EUR</option>
+            </select>
+          </div>
+          <div>
+            <label>Darabszám</label>
+            <input type="number" id="st-qty" placeholder="0">
+          </div>
+          <div>
+            <label id="st-avg-label">Vételi ár (HUF)</label>
+            <input type="number" id="st-avg" placeholder="0">
+          </div>
+          <div>
+            <label id="st-div-label">Éves osztalékhozam (%)</label>
+            <input type="number" id="st-div" placeholder="0" step="0.01">
+          </div>
+          <div>
+            <label>Vétel dátuma</label>
+            <input type="date" id="st-date">
+          </div>
+        </div>
+        <div id="st-fx-info" style="font-size:11px;color:var(--muted);margin-bottom:12px;display:none">
+          Az árak automatikusan HUF-ra lesznek átváltva rögzítéskor (1 USD ≈ <span id="st-fx-rate">360</span> Ft)
+        </div>
+        <button class="btn" onclick="addStock()" style="width:100%">+ Hozzáadás</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="tab-content" id="tab-crypto">
+  <div class="section-header">
+    <div class="section-title">Kripto Kereskedés — P&amp;L</div>
+    <button class="btn" onclick="openModal('crypto-modal')">+ Vétel rögzítése</button>
+  </div>
+
+  <div>
+    <div>
+      <div id="crypto-refresh-bar"></div>
+
+      <div class="grid g4" style="margin-bottom:16px">
+        <div class="card card-stat-dark" id="cr-realized-card">
+          <div class="card-title">Realizált P&amp;L</div>
+          <div class="stat-value" id="cr-realized">0 Ft</div>
+        </div>
+        <div class="card card-stat-cyan">
+          <div class="card-title">Bekerülési érték (nyitott)</div>
+          <div class="stat-value cyan" id="cr-open">0 Ft</div>
+        </div>
+        <div class="card card-stat-cyan">
+          <div class="card-title">Aktuális eladási érték</div>
+          <div id="cr-live-open"><div class="stat-value" style="color:var(--muted)">—</div><div class="stat-sub">Nyomj frissítést</div></div>
+        </div>
+        <div class="card card-stat-red">
+          <div class="card-title">Összes díj</div>
+          <div class="stat-value red" id="cr-fees">0 Ft</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Kereskedési napló</div>
+        <div class="scroll-table">
+          <table>
+            <thead><tr><th>Dátum</th><th>Coin</th><th>Típus</th><th>Mennyiség</th><th>Ár</th><th>Érték</th><th>Díj</th><th>P&amp;L</th><th></th></tr></thead>
+            <tbody id="crypto-tbody"></tbody>
+          </table>
+        </div>
+        <div class="divider"></div>
+        <div id="crypto-coin-summary" style="display:flex;gap:16px;flex-wrap:wrap"></div>
+      </div>
+    </div>
+
+    <div class="modal" id="crypto-modal" onclick="if(event.target===this)closeModal('crypto-modal')">
+      <div class="modal-card">
+        <div class="modal-head">
+          <div class="section-title" style="font-size:18px">Vétel rögzítése</div>
+          <button class="btn btn-secondary btn-sm" onclick="closeModal('crypto-modal')">✕</button>
+        </div>
+        <div class="form-grid fg2" style="margin-bottom:12px">
+          <div>
+            <label>Coin</label>
+            <input type="text" id="cr-coin" placeholder="BTC, ETH, ...">
+          </div>
+          <div>
+            <label>Deviza</label>
+            <select id="cr-currency" onchange="updateCryptoLabels()">
+              <option value="HUF">HUF</option>
+              <option value="USD">USD</option>
+              <option value="EUR">EUR</option>
+            </select>
+          </div>
+          <div>
+            <label>Mennyiség</label>
+            <input type="number" id="cr-qty" placeholder="0" step="any">
+          </div>
+          <div>
+            <label id="cr-price-label">Ár (Ft)</label>
+            <input type="number" id="cr-price" placeholder="0" step="any">
+          </div>
+          <div>
+            <label>Dátum</label>
+            <input type="date" id="cr-date">
+          </div>
+          <div>
+            <label id="cr-fee-label">Díj (Ft)</label>
+            <input type="number" id="cr-fee" placeholder="0" step="any">
+          </div>
+        </div>
+        <div id="cr-fx-info" style="font-size:11px;color:var(--muted);margin-bottom:12px;display:none">
+          Az ár és a díj a <strong>vétel dátumához</strong> tartozó (történeti) árfolyammal lesz HUF-ra váltva. Mai árfolyam: 1 <span id="cr-fx-cur">USD</span> ≈ <span id="cr-fx-rate">360</span> Ft
+        </div>
+        <button class="btn" onclick="addCryptoTrade()" style="width:100%">+ Vétel rögzítése</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="tab-content" id="tab-gold">
+  <div class="section-header">
+    <div class="section-title">Fizikai Arany</div>
+    <button class="btn" onclick="openModal('gold-modal')">+ Aranytétel rögzítése</button>
+  </div>
+
+  <div>
+    <div>
+      <div class="grid g4" style="margin-bottom:16px">
+        <div class="card card-stat-yellow">
+          <div class="card-title">Összes tömeg</div>
+          <div class="stat-value yellow" id="gd-total-grams">0 g</div>
+        </div>
+        <div class="card card-stat-dark">
+          <div class="card-title">Összes vételár</div>
+          <div class="stat-value" id="gd-total-cost">0 Ft</div>
+        </div>
+        <div class="card card-stat-cyan">
+          <div class="card-title">Jelenlegi érték</div>
+          <div class="stat-value cyan" id="gd-total-value">0 Ft</div>
+        </div>
+        <div class="card card-stat-dark" id="gd-total-pl-card">
+          <div class="card-title">P&amp;L</div>
+          <div class="stat-value" id="gd-total-pl">0 Ft</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Aranytételek</div>
+        <div class="scroll-table">
+          <table>
+            <thead><tr><th>Megnevezés</th><th>Kód</th><th>Forma</th><th>Tisztaság</th><th>Tömeg</th><th>Vétel dátuma</th><th>Vételár</th><th>Jelenlegi érték</th><th>P&amp;L</th><th></th></tr></thead>
+            <tbody id="gold-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+      <div class="modal" id="gold-modal" onclick="if(event.target===this)closeModal('gold-modal')">
+        <div class="modal-card">
+          <div class="modal-head">
+            <div class="section-title" style="font-size:18px">Aranytétel hozzáadása</div>
+            <button class="btn btn-secondary btn-sm" onclick="closeModal('gold-modal')">✕</button>
+          </div>
+          <div class="form-grid fg2" style="margin-bottom:12px">
+          <div>
+            <label>Megnevezés / típus</label>
+            <input type="text" id="gd-name" placeholder="pl. Krugerrand, 1 uncia">
+          </div>
+          <div>
+            <label>Kód / sorszám</label>
+            <input type="text" id="gd-code" placeholder="pl. AB123456">
+          </div>
+          <div>
+            <label>Forma</label>
+            <select id="gd-form">
+              <option value="érme">Érme</option>
+              <option value="rúd">Rúd / tömb</option>
+              <option value="ékszer">Ékszer</option>
+              <option value="egyéb">Egyéb</option>
+            </select>
+          </div>
+          <div>
+            <label>Tisztaság</label>
+            <select id="gd-purity">
+              <option value="999.9">999.9 (24k)</option>
+              <option value="916">916 (22k)</option>
+              <option value="750">750 (18k)</option>
+              <option value="585">585 (14k)</option>
+              <option value="egyéb">Egyéb</option>
+            </select>
+          </div>
+          <div>
+            <label>Tömeg (gramm)</label>
+            <input type="number" id="gd-grams" placeholder="0" step="any">
+          </div>
+          <div>
+            <label>Vétel dátuma</label>
+            <input type="date" id="gd-date">
+          </div>
+          <div>
+            <label>Vételár összesen (Ft)</label>
+            <input type="text" inputmode="numeric" id="gd-cost" placeholder="0" oninput="formatThousands(this)">
+          </div>
+        </div>
+        <button class="btn" onclick="addGold()" style="width:100%">+ Hozzáadás</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="tab-content" id="tab-pledge">
+  <div class="section-header">
+    <div class="section-title">Zálog (arany fedezetű kölcsön)</div>
+    <button class="btn" onclick="openModal('pledge-modal')">+ Zálogba adás</button>
+  </div>
+
+  <div>
+    <div>
+      <div class="grid g4" style="margin-bottom:16px">
+        <div class="card card-stat-cyan">
+          <div class="card-title">Kézhez kapott</div>
+          <div class="stat-value cyan" id="pl-sum-cash">0 Ft</div>
+        </div>
+        <div class="card card-stat-red">
+          <div class="card-title">Jelenlegi tartozás</div>
+          <div class="stat-value red" id="pl-sum-debt">0 Ft</div>
+        </div>
+        <div class="card card-stat-yellow">
+          <div class="card-title">Visszafizetendő lejáratkor</div>
+          <div class="stat-value yellow" id="pl-sum-repay">0 Ft</div>
+        </div>
+        <div class="card card-stat-dark">
+          <div class="card-title">Zálogtételek</div>
+          <div class="stat-value" id="pl-sum-count">0 db</div>
+        </div>
+      </div>
+      <div id="pledge-cards" style="display:grid;gap:16px"></div>
+    </div>
+
+      <div class="modal" id="pledge-modal" onclick="if(event.target===this)closeModal('pledge-modal')">
+        <div class="modal-card">
+          <div class="modal-head">
+            <div class="section-title" style="font-size:18px">Zálogba adás</div>
+            <button class="btn btn-secondary btn-sm" onclick="closeModal('pledge-modal')">✕</button>
+          </div>
+          <div class="form-grid fg2" style="margin-bottom:12px">
+          <div>
+            <label>Aranytétel(ek) — fedezet (több is választható)</label>
+            <div id="pl-gold" style="max-height:160px;overflow-y:auto;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:4px"></div>
+          </div>
+          <div>
+            <label>Kölcsön összeg (Ft)</label>
+            <input type="text" inputmode="numeric" id="pl-principal" placeholder="0" oninput="formatThousands(this);updatePledgeNet()">
+          </div>
+          <div>
+            <label>Kezelési költség (%)</label>
+            <input type="number" id="pl-fee" placeholder="0" step="0.01" oninput="updatePledgeNet()">
+          </div>
+          <div>
+            <label>Kamat (% / év)</label>
+            <input type="number" id="pl-rate" placeholder="0" step="0.01">
+          </div>
+          <div>
+            <label>Zálogba adás dátuma</label>
+            <input type="date" id="pl-start" oninput="calcPledgeEndDate()">
+          </div>
+          <div>
+            <label>Futamidő</label>
+            <select id="pl-term" onchange="calcPledgeEndDate()">
+              <option value="30">30 nap</option>
+              <option value="60">60 nap</option>
+              <option value="90">90 nap</option>
+            </select>
+          </div>
+          <div>
+            <label>Lejárat dátuma</label>
+            <input type="date" id="pl-end" readonly style="opacity:0.6">
+          </div>
+          <div id="pl-net-info" style="font-size:11px;color:var(--accent2)"></div>
+          <div id="pl-end-info" style="font-size:11px;color:var(--muted)"></div>
+        </div>
+        <button class="btn" onclick="addPledge()" style="width:100%">+ Zálogba adás</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="tab-content" id="tab-loan">
+  <div class="section-header">
+    <div class="section-title">Hitel Nyilvántartás</div>
+    <button class="btn" onclick="openModal('loan-modal')">+ Hitel rögzítése</button>
+  </div>
+
+  <div>
+    <div>
+      <div id="loan-list-view">
+        <div class="grid g4" style="margin-bottom:16px">
+          <div class="card card-stat-red">
+            <div class="card-title">Összes fennálló</div>
+            <div class="stat-value red" id="ln-sum-remain">0 Ft</div>
+          </div>
+          <div class="card card-stat-dark">
+            <div class="card-title">Havi törlesztés</div>
+            <div class="stat-value" id="ln-sum-monthly">0 Ft</div>
+          </div>
+          <div class="card card-stat-yellow">
+            <div class="card-title">Éves törlesztés</div>
+            <div class="stat-value yellow" id="ln-sum-yearly">0 Ft</div>
+          </div>
+          <div class="card card-stat-cyan">
+            <div class="card-title">Hitelek száma</div>
+            <div class="stat-value cyan" id="ln-sum-count">0 db</div>
+          </div>
+        </div>
+        <div id="loan-cards" style="display:grid;gap:16px;margin-bottom:16px"></div>
+      </div>
+
+      <div id="loan-detail-view" style="display:none">
+        <div style="margin-bottom:16px">
+          <button class="btn btn-secondary" onclick="closeLoanDetail()">← Vissza a hitelekhez</button>
+        </div>
+        <div id="loan-detail-content"></div>
+      </div>
+    </div>
+
+    <div class="modal" id="loan-modal" onclick="if(event.target===this)closeModal('loan-modal')">
+      <div class="modal-card">
+        <div class="modal-head">
+          <div class="section-title" style="font-size:18px">Hitel hozzáadása</div>
+          <button class="btn btn-secondary btn-sm" onclick="closeModal('loan-modal')">✕</button>
+        </div>
+        <div class="form-grid fg2" style="margin-bottom:12px">
+          <div>
+            <label>Hitel neve</label>
+            <input type="text" id="ln-name" placeholder="pl. Lakáshitel OTP">
+          </div>
+          <div>
+            <label>Felvett összeg (Ft)</label>
+            <input type="text" inputmode="numeric" id="ln-orig" placeholder="3 000 000" oninput="formatThousands(this)">
+          </div>
+          <div>
+            <label>Folyósítás dátuma</label>
+            <input type="date" id="ln-start">
+          </div>
+          <div>
+            <label>Futamidő (hónap)</label>
+            <input type="number" id="ln-months" placeholder="pl. 60" oninput="calcLoanEndDate()">
+          </div>
+          <div>
+            <label>Törlesztés napja (havonta)</label>
+            <input type="number" id="ln-payday" placeholder="pl. 15" min="1" max="31" oninput="calcLoanEndDate()">
+          </div>
+          <div>
+            <label>Törlesztés rendszeressége</label>
+            <select id="ln-frequency">
+              <option value="monthly">Havi</option>
+              <option value="quarterly">Negyedéves</option>
+              <option value="yearly">Éves</option>
+            </select>
+          </div>
+          <div>
+            <label>Kamat (% / év)</label>
+            <input type="number" id="ln-rate" placeholder="0" step="0.01">
+          </div>
+          <div>
+            <label>THM (% / év)</label>
+            <input type="number" id="ln-thm" placeholder="0" step="0.01">
+          </div>
+          <div>
+            <label>Havi törlesztő (Ft)</label>
+            <input type="text" inputmode="numeric" id="ln-monthly" placeholder="50 000" oninput="formatThousands(this)">
+          </div>
+          <div>
+            <label>Lejárat dátuma</label>
+            <input type="date" id="ln-end" readonly style="opacity:0.6">
+          </div>
+          <div id="ln-end-info" style="font-size:11px;color:var(--muted)"></div>
+        </div>
+        <button class="btn" onclick="addLoan()" style="width:100%">+ Hozzáadás</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="tab-content" id="tab-services">
+  <div class="section-header">
+    <div class="section-title">Rendszeres Szolgáltatások / Előfizetések</div>
+    <button class="btn" onclick="openModal('service-modal')">+ Előfizetés rögzítése</button>
+  </div>
+
+  <div class="grid g4" style="margin-bottom:16px">
+    <div class="card card-stat-red">
+      <div class="card-title">Havi összköltség</div>
+      <div class="stat-value red" id="sv-monthly">0 Ft</div>
+    </div>
+    <div class="card card-stat-yellow">
+      <div class="card-title">Éves összköltség</div>
+      <div class="stat-value yellow" id="sv-yearly">0 Ft</div>
+    </div>
+    <div class="card card-stat-cyan">
+      <div class="card-title">Aktív előfizetések</div>
+      <div class="stat-value cyan" id="sv-count">0 db</div>
+    </div>
+    <div class="card card-stat-blue">
+      <div class="card-title">Következő terhelés</div>
+      <div class="stat-value" id="sv-next" style="font-size:18px">—</div>
+    </div>
+  </div>
+
+  <div>
+    <div>
+      <div class="card">
+        <div class="card-title">Előfizetések</div>
+        <div class="scroll-table">
+          <table>
+            <thead><tr><th>Szolgáltatás</th><th>Számla</th><th>Díj</th><th>Ciklus</th><th>Terhelés napja</th><th>Havi vetített</th><th>Státusz</th><th></th></tr></thead>
+            <tbody id="services-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal" id="service-modal" onclick="if(event.target===this)closeModal('service-modal')">
+      <div class="modal-card">
+        <div class="modal-head">
+          <div class="section-title" style="font-size:18px">Előfizetés hozzáadása</div>
+          <button class="btn btn-secondary btn-sm" onclick="closeModal('service-modal')">✕</button>
+        </div>
+        <div class="form-grid fg2" style="margin-bottom:12px">
+          <div>
+            <label>Szolgáltatás neve</label>
+            <input type="text" id="sv-name" placeholder="pl. Netflix">
+          </div>
+          <div>
+            <label>Kategória</label>
+            <select id="sv-cat">
+              <option value="Streaming">Streaming</option>
+              <option value="Zene">Zene</option>
+              <option value="Telefon">Telefon</option>
+              <option value="Internet">Internet</option>
+              <option value="Szoftver">Szoftver / Felhő</option>
+              <option value="Hosting">Hosting / Domain</option>
+              <option value="Biztosítás">Biztosítás</option>
+              <option value="Edzés">Edzés / Sport</option>
+              <option value="Egyéb">Egyéb</option>
+            </select>
+          </div>
+          <div>
+            <label>Díj (Ft)</label>
+            <input type="text" inputmode="numeric" id="sv-amount" placeholder="0" oninput="formatThousands(this)">
+          </div>
+          <div>
+            <label>Számlázási ciklus</label>
+            <select id="sv-cycle">
+              <option value="monthly">Havi</option>
+              <option value="quarterly">Negyedéves</option>
+              <option value="yearly">Éves</option>
+              <option value="weekly">Heti</option>
+            </select>
+          </div>
+          <div>
+            <label>Terhelés napja (hónapban)</label>
+            <input type="number" id="sv-day" placeholder="pl. 5" min="1" max="31">
+          </div>
+          <div>
+            <label>Melyik számláról</label>
+            <select id="sv-account">
+              <option value="Revolut">Revolut</option>
+              <option value="Főszámla">Főszámla (lakossági)</option>
+              <option value="Egyéb">Egyéb</option>
+            </select>
+          </div>
+        </div>
+        <button class="btn" onclick="addService()" style="width:100%">+ Hozzáadás</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="redeem-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.65);backdrop-filter:blur(4px);z-index:1000;align-items:center;justify-content:center;padding:16px" onclick="if(event.target===this)closeRedeemModal()">
+  <div class="card" style="max-width:440px;width:100%;margin:0">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <div class="section-title" style="font-size:18px">Zálog kiváltása</div>
+      <button class="btn btn-secondary btn-sm" onclick="closeRedeemModal()">✕</button>
+    </div>
+    <div id="redeem-info" style="font-size:12px;color:var(--muted);margin-bottom:16px"></div>
+    <div class="form-grid fg2" style="margin-bottom:12px">
+      <div>
+        <label>Kiváltás dátuma</label>
+        <input type="date" id="redeem-date">
+      </div>
+      <div>
+        <label>Kiváltási összeg (Ft)</label>
+        <input type="text" inputmode="numeric" id="redeem-amount" placeholder="0" oninput="formatThousands(this)">
+      </div>
+    </div>
+    <div id="redeem-error" style="color:var(--red);font-size:11px;margin-bottom:12px;display:none"></div>
+    <button class="btn" onclick="confirmRedeem()" style="width:100%">Kiváltás rögzítése</button>
+  </div>
+</div>
+
+</main>
+
+<div id="sell-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.65);backdrop-filter:blur(4px);z-index:1000;align-items:center;justify-content:center;padding:16px" onclick="if(event.target===this)closeSellModal()">
+  <div class="card" style="max-width:440px;width:100%;margin:0">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <div class="section-title" style="font-size:18px">Kripto eladása</div>
+      <button class="btn btn-secondary btn-sm" onclick="closeSellModal()">✕</button>
+    </div>
+    <div id="sell-coin-info" style="font-size:12px;color:var(--muted);margin-bottom:16px"></div>
+    <div class="form-grid fg2" style="margin-bottom:12px">
+      <div>
+        <label>Eladás dátuma</label>
+        <input type="date" id="sell-date">
+      </div>
+      <div>
+        <label>Deviza</label>
+        <select id="sell-currency" onchange="updateSellLabels()">
+          <option value="HUF">HUF</option>
+          <option value="USD">USD</option>
+          <option value="EUR">EUR</option>
+        </select>
+      </div>
+      <div>
+        <label>Mennyiség (db)</label>
+        <input type="number" id="sell-qty" placeholder="0" step="any">
+      </div>
+      <div>
+        <label id="sell-price-label">Eladási ár / db (Ft)</label>
+        <input type="number" id="sell-price" placeholder="0" step="any">
+      </div>
+      <div>
+        <label id="sell-fee-label">Díj (Ft)</label>
+        <input type="number" id="sell-fee" placeholder="0" step="any">
+      </div>
+    </div>
+    <div id="sell-fx-info" style="font-size:11px;color:var(--muted);margin-bottom:12px;display:none"></div>
+    <div id="sell-error" style="color:var(--red);font-size:11px;margin-bottom:12px;display:none"></div>
+    <button class="btn" onclick="confirmSell()" style="width:100%">Eladás rögzítése</button>
+  </div>
+</div>
+
+<div class="modal" id="data-modal" onclick="if(event.target===this)closeModal('data-modal')">
+  <div class="modal-card" style="max-width:440px">
+    <div class="modal-head">
+      <div class="section-title" style="font-size:18px">Adatok mentése és visszatöltése</div>
+      <button class="btn btn-secondary btn-sm" onclick="closeModal('data-modal')">✕</button>
+    </div>
+    <div class="alert" style="margin-bottom:16px">
+      Az adataid a felhőben (Firebase) tárolódnak a bejelentkezett fiókodhoz kötve, így bármelyik eszközről eléred őket.
+      Fájlba mentést azért érdemes időnként készíteni: ez a saját biztonsági másolatod, ha véletlenül törölnél valamit, vagy exportálni szeretnéd az adataidat.
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <button class="btn" onclick="exportData()" style="width:100%">⬇ Mentés fájlba (JSON)</button>
+      <label class="btn btn-secondary" style="display:block;text-align:center;cursor:pointer;width:100%;box-sizing:border-box">
+        ⬆ Visszatöltés fájlból
+        <input type="file" accept=".json,application/json" style="display:none" onchange="importData(this)">
+      </label>
+      <button class="btn btn-danger" onclick="resetAllData()" style="width:100%">🗑 Adatok nullázása</button>
+    </div>
+    <p style="color:var(--muted);font-size:11px;margin-top:14px;line-height:1.5">
+      A visszatöltés a jelenlegi adatokat felülírja. A nullázás minden adatot véglegesen töröl ezen az eszközön. Mindkét művelet előtt megerősítést kérek.
+    </p>
+  </div>
+</div>
+
+<div class="modal open" id="login-modal">
+  <div class="modal-card" style="max-width:380px">
+    <div class="modal-head">
+      <div class="section-title" style="font-size:18px">Bejelentkezés</div>
+    </div>
+    <div class="alert" style="margin-bottom:16px">
+      Az adataid mostantól a felhőben (Firebase) tárolódnak, így bármelyik eszközödről elérheted őket bejelentkezés után.
+    </div>
+    <div class="form-grid" style="margin-bottom:12px">
+      <div>
+        <label>E-mail cím</label>
+        <input type="email" id="login-email" placeholder="pl. gabor@example.com" autocomplete="username">
+      </div>
+      <div>
+        <label>Jelszó</label>
+        <input type="password" id="login-password" placeholder="min. 6 karakter" autocomplete="current-password">
+      </div>
+    </div>
+    <div id="login-error" style="color:#c0392b;font-size:12px;margin-bottom:12px;min-height:16px"></div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <button class="btn" onclick="loginWithEmail()" style="width:100%">Bejelentkezés</button>
+      <button class="btn btn-secondary" onclick="registerWithEmail()" style="width:100%">Új fiók regisztrálása</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="script.js"></script>
+</body>
+</html>
