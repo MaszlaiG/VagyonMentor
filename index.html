@@ -10,9 +10,11 @@
 <body>
 
 <header>
-  <div class="logo">Vagyon<span>Mentor</span></div>
+  <div>
+    <div class="logo">Vagyon<span>Mentor</span></div>
+    <div id="logged-in-as" class="logged-in-email"></div>
+  </div>
   <div style="display:flex;align-items:center;gap:12px">
-    <span id="logged-in-as" style="font-size:11.5px;color:var(--muted)"></span>
     <button class="btn btn-secondary btn-sm" onclick="openDataModal()">💾 Adatok</button>
     <button class="btn btn-secondary btn-sm" onclick="logout()">Kijelentkezés</button>
     <div class="header-meta" id="header-date"></div>
