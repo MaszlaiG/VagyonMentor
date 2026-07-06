@@ -2,7 +2,7 @@ VagyonMentor
 
 Személyes vagyonkövető webalkalmazás — egy helyen tartja számon a részvényeket, kriptovalutákat, aranyat, hiteleket, zálogokat és rendszeres szolgáltatásokat/előfizetéseket.
 
-🔗 Élő verzió: https://maszlaig.github.io/vagyonmentor/
+🔗 Élő verzió: https://maszlaig.github.io/VagyonMentor/
 
 Funkciók
 
