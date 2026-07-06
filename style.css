@@ -25,6 +25,36 @@
   --ui: 'Inter', -apple-system, 'Segoe UI', sans-serif;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* SÖTÉT MÓD — napszak alapján a JS automatikusan rákapcsolja a <html>-re
+   a "dark" class-t (kb. 19:00–06:00 között), ez a blokk írja felül
+   ilyenkor a fenti :root színeket. Mivel minden elem var(--...)-ot
+   használ, ez a felülírás magától végigfut az egész felületen. */
+html.dark {
+  --bg: #0f141f;
+  --surface: #161d2c;
+  --surface2: #1c2436;
+  --surface3: #222b40;
+  --border: #2a3348;
+  --border2: #3a4560;
+  --text: #e7ebf3;
+  --muted: #93a0b8;
+  --primary: #6f97ff;
+  --primary-strong: #8fadff;
+  --accent: #3fce8a;
+  --accent2: #33bcdb;
+  --accent3: #e2ab52;
+  --red: #f17976;
+  --purple: #a892e8;
+  --shadow: 0 1px 2px rgba(0,0,0,0.35), 0 1px 3px rgba(0,0,0,0.3);
+}
+html.dark header { background: rgba(15, 20, 31, 0.85); }
+html.dark .alert { background: #2c2510; border-color: #5a4a1e; color: #e3c47c; }
+html.dark input::placeholder { color: #5f6b82; }
+html.dark ::-webkit-scrollbar-track { background: var(--surface2); }
+html.dark img, html.dark svg.logo-mark { filter: none; }
+html { transition: background-color .25s ease; }
+
 html { overflow-x: hidden; }
 body {
   background: var(--bg);

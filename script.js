@@ -1,4 +1,18 @@
 /* ============================================================
+   SÖTÉT MÓD — napszak alapján automatikus
+   19:00–06:00 között sötét, egyébként világos. A színek maguk a
+   style.css-ben vannak (html.dark { --bg: ...; ... }), itt csak
+   a class ki/bekapcsolása történik.
+   ============================================================ */
+function applyThemeByTime() {
+  const h = new Date().getHours();
+  const isDark = h >= 19 || h < 6;
+  document.documentElement.classList.toggle('dark', isDark);
+}
+applyThemeByTime();
+setInterval(applyThemeByTime, 5 * 60 * 1000); // 5 percenként újraellenőrzi, ha nyitva marad az app napszakváltáskor
+
+/* ============================================================
    FIREBASE INICIALIZÁLÁS + BEJELENTKEZÉS
    A state mentése/betöltése (save/load) a script.js-ben van,
    ez a fájl csak az auth-ot és a Firestore kapcsolatot adja.
