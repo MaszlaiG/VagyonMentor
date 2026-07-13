@@ -1321,6 +1321,7 @@ function updatePledgeNet() {
 
 function addPledge() {
   const goldIds   = [...document.querySelectorAll('#pl-gold input:checked')].map(i => i.value);
+  const ticketNo  = (document.getElementById('pl-ticket').value || '').trim();
   const principal = parseAmount('pl-principal');
   const feePct    = parseFloat(document.getElementById('pl-fee').value)||0;
   const start     = document.getElementById('pl-start').value || now();
@@ -1333,9 +1334,9 @@ function addPledge() {
   });
   const endD = pledgeAddDays(start, days);
   const end = endD ? endD.toISOString().slice(0,10) : '';
-  state.pledges.push({ id:uid(), goldIds, goldNames, principal, feePct, start, days, rate, end });
+  state.pledges.push({ id:uid(), goldIds, goldNames, ticketNo, principal, feePct, start, days, rate, end });
   save();
-  ['pl-principal','pl-fee','pl-rate','pl-end'].forEach(id => {
+  ['pl-principal','pl-fee','pl-rate','pl-end','pl-ticket'].forEach(id => {
     const el = document.getElementById(id); if (el) el.value = '';
   });
   document.getElementById('pl-end-info').textContent = '';
@@ -1487,7 +1488,7 @@ function renderPledges() {
           <div>
             <div style="font-family:var(--display);font-size:17px;font-weight:700">${goldLabel} ${badge}</div>
             <div style="color:var(--muted);font-size:11px;margin-top:2px">
-              Zálogba adva: ${p.start||'—'} &nbsp;|&nbsp; Lejárat: ${p.end||'—'} &nbsp;|&nbsp; ${d.termLabel}
+              ${p.ticketNo ? `Zálogjegy sorszám: <strong style="color:var(--text)">${p.ticketNo}</strong> &nbsp;|&nbsp; ` : ''}Zálogba adva: ${p.start||'—'} &nbsp;|&nbsp; Lejárat: ${p.end||'—'} &nbsp;|&nbsp; ${d.termLabel}
             </div>
           </div>
           ${headerBtn}
@@ -1563,7 +1564,9 @@ function renderGold() {
   const tbody = document.getElementById('gold-tbody');
   if (!tbody) return;
 
-  tbody.innerHTML = state.goldItems.map(g => {
+  const sortedGold = [...state.goldItems].sort((a,b) => (b.date||'').localeCompare(a.date||''));
+
+  tbody.innerHTML = sortedGold.map(g => {
     const value = goldItemValue(g, spot);
     const pl = value - g.cost;
     const pledged = pledgedGoldIds().has(g.id);
@@ -1694,6 +1697,105 @@ function servicesMonthlyTotal() {
   return state.services.filter(s => s.active).reduce((a,s) => a + serviceMonthlyCost(s), 0);
 }
 
+function daysUntil(dateStr) {
+  const target = new Date(dateStr + 'T00:00:00');
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  return Math.round((target - today) / 86400000);
+}
+
+function buildUpcomingDatesHTML() {
+  const items = [];
+
+  // Zálogok lejárata — 1 hónapon (30 napon) belül, aktív (nem kiváltott) tételek
+  state.pledges.filter(p => !p.redeemed && p.end).forEach(p => {
+    const days = daysUntil(p.end);
+    if (days <= 30) {
+      const goldLabel = (p.goldNames && p.goldNames.length) ? p.goldNames.join(', ') : 'arany';
+      items.push({
+        kind: 'pledge',
+        kindLabel: 'zálog',
+        badgeClass: 'badge-purple',
+        label: `Zálog lejárata – ${goldLabel}${p.ticketNo ? ` (${p.ticketNo})` : ''}`,
+        date: p.end,
+        days,
+      });
+    }
+  });
+
+  // Hitelrészletek — legközelebbi ki nem fizetett részlet, ha 1 héten (7 napon) belül esedékes
+  state.loans.forEach(l => {
+    const paidSet = state.paidInstallments[l.id] || {};
+    for (let i=0; i<l.months; i++) {
+      if (!paidSet[i+1]) {
+        const d = getPaymentDate(l, i);
+        const dateStr = d.toISOString().slice(0,10);
+        const days = daysUntil(dateStr);
+        if (days <= 7) {
+          items.push({
+            kind: 'loan',
+            kindLabel: 'hitel',
+            badgeClass: 'badge-red',
+            label: `Hiteltörlesztés – ${l.name}`,
+            date: dateStr,
+            days,
+            amount: l.monthly,
+          });
+        }
+        break;
+      }
+    }
+  });
+
+  // Előfizetések / szolgáltatások — 1 héten (7 napon) belül esedékes, aktív tételek
+  state.services.filter(s => s.active && s.day).forEach(s => {
+    const nd = nextChargeDate(s.day);
+    if (nd) {
+      const dateStr = nd.toISOString().slice(0,10);
+      const days = daysUntil(dateStr);
+      if (days <= 7) {
+        items.push({
+          kind: 'service',
+          kindLabel: 'szolgáltatás',
+          badgeClass: 'badge-yellow',
+          label: `Esedékes fizetés – ${s.name}`,
+          date: dateStr,
+          days,
+          amount: s.amount,
+        });
+      }
+    }
+  });
+
+  if (!items.length) {
+    return '<div style="color:var(--muted);text-align:center;padding:20px;font-size:12px">Nincs közelgő fontos esemény a következő napokban</div>';
+  }
+
+  items.sort((a,b) => a.days - b.days);
+
+  return items.map(it => {
+    let daysLabel, urgencyClass;
+    if (it.days < 0) { daysLabel = `Lejárt ${Math.abs(it.days)} napja`; urgencyClass = 'red'; }
+    else if (it.days === 0) { daysLabel = 'Ma esedékes'; urgencyClass = 'red'; }
+    else if (it.days <= 3) { daysLabel = `${it.days} nap múlva`; urgencyClass = 'red'; }
+    else if (it.days <= 7) { daysLabel = `${it.days} nap múlva`; urgencyClass = 'yellow'; }
+    else { daysLabel = `${it.days} nap múlva`; urgencyClass = ''; }
+
+    return `
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);font-size:12px">
+        <div style="min-width:0">
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+            <span class="badge ${it.badgeClass}" style="font-size:9px;padding:2px 6px">${it.kindLabel}</span>
+            <span style="font-weight:600">${it.label}</span>
+          </div>
+          <div style="color:var(--muted);font-size:10px;margin-top:3px">${new Date(it.date+'T00:00:00').toLocaleDateString('hu-HU')}${it.amount ? ' · ' + fmt(it.amount) : ''}</div>
+        </div>
+        <span class="${urgencyClass}" style="font-weight:700;font-size:11px;white-space:nowrap;flex-shrink:0">${daysLabel}</span>
+      </div>
+    `;
+  }).join('');
+}
+
 function renderDashboard() {
   const stockVal = state.stocks.reduce((a,s)=>{
     const livePrice = getLivePrice(s.ticker);
@@ -1741,18 +1843,7 @@ function renderDashboard() {
   nwEl.className = 'stat-value ' + (nwRound > 0 ? 'green' : (nwRound < 0 ? 'red' : ''));
 
   const qs = document.getElementById('quick-status');
-  qs.innerHTML = [
-    ['Arany értéke', fmt(goldVal), 'yellow'],
-    ['Részvényportfólió értéke', fmt(stockVal), stockVal-stockCost>=0?'green':'red'],
-    ['Kripto nyitott pozíció', fmt(cryptoOpen), 'cyan'],
-    ['Zálog tartozás', fmt(totalPledge), 'purple'],
-    ['Összes fennálló hitel', fmt(totalLoan), 'red'],
-  ].map(([l,v,c]) => `
-    <div style="display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--border);font-size:12px">
-      <span style="color:var(--muted)">${l}</span>
-      <span class="${c}" style="font-weight:600">${v}</span>
-    </div>
-  `).join('');
+  qs.innerHTML = buildUpcomingDatesHTML();
 
   const dm = document.getElementById('dash-monthly');
   const monthlyLoan = state.loans.reduce((a,l)=>a+l.monthly,0);
@@ -1856,33 +1947,54 @@ function renderWatch() {
   }
 
   const goldBox = document.getElementById('dash-gold');
-  if (goldBox) {
+  const goldPledgedBox = document.getElementById('dash-gold-pledged');
+  if (goldBox || goldPledgedBox) {
     const spot = state.goldSpot || 28000;
-    if (state.goldItems.length) {
-      const pledgedSet = pledgedGoldIds();
+    const pledgedSet = pledgedGoldIds();
+
+    const buildAgg = items => {
       const agg = {};
-      state.goldItems.forEach(g=>{
+      items.forEach(g=>{
         const k = `${g.name}|${g.grams}|${g.purity}|${g.form}`;
-        if (!agg[k]) agg[k] = { name:g.name, grams:g.grams, count:0, totalGrams:0, cost:0, val:0, anyPledged:false };
+        if (!agg[k]) agg[k] = { name:g.name, grams:g.grams, count:0, totalGrams:0, cost:0, val:0 };
         agg[k].count++;
         agg[k].totalGrams += g.grams;
         agg[k].cost += g.cost;
         agg[k].val += goldItemValue(g, spot);
-        if (pledgedSet.has(g.id)) agg[k].anyPledged = true;
       });
-      goldBox.innerHTML = Object.values(agg).map(a=>{
-        const pl = a.val - a.cost;
-        const badge = a.anyPledged ? `<span class="badge badge-purple">zálogban</span>` : '';
-        const title = `${a.name}${a.count>1?` <span class="badge badge-yellow">${a.count} db</span>`:''}`;
-        return dashTile(title, badge, [
-          ['Darab', `${a.count} db (${fmtNum(a.grams)} g/db)`, ''],
-          ['Össztömeg', `${fmtNum(a.totalGrams)} g`, ''],
-          ['Vételár', fmt(a.cost), ''],
-          ['Jelenlegi érték', fmt(a.val), 'cyan'],
-          ['P&L', `${pl>=0?'+':''}${fmt(pl)}`, pl>=0?'green':'red'],
-        ]);
-      }).join('');
-    } else goldBox.innerHTML = emptyTile('Nincs aranytétel');
+      return agg;
+    };
+
+    const goldTile = (a, pledgeBadge) => {
+      const pl = a.val - a.cost;
+      const title = `${a.name}${a.count>1?` <span class="badge badge-yellow">${a.count} db</span>`:''}`;
+      return dashTile(title, pledgeBadge||'', [
+        ['Darab', `${a.count} db (${fmtNum(a.grams)} g/db)`, ''],
+        ['Össztömeg', `${fmtNum(a.totalGrams)} g`, ''],
+        ['Vételár', fmt(a.cost), ''],
+        ['Jelenlegi érték', fmt(a.val), 'cyan'],
+        ['P&L', `${pl>=0?'+':''}${fmt(pl)}`, pl>=0?'green':'red'],
+      ]);
+    };
+
+    if (goldBox) {
+      const freeItems = state.goldItems.filter(g => !pledgedSet.has(g.id));
+      if (freeItems.length) {
+        goldBox.innerHTML = Object.values(buildAgg(freeItems)).map(a => goldTile(a)).join('');
+      } else {
+        goldBox.innerHTML = emptyTile('Nincs szabad (nem zálogba adott) aranytétel');
+      }
+    }
+
+    if (goldPledgedBox) {
+      const pledgedItems = state.goldItems.filter(g => pledgedSet.has(g.id));
+      if (pledgedItems.length) {
+        const badge = `<span class="badge badge-purple">zálogban</span>`;
+        goldPledgedBox.innerHTML = Object.values(buildAgg(pledgedItems)).map(a => goldTile(a, badge)).join('');
+      } else {
+        goldPledgedBox.innerHTML = emptyTile('Nincs zálogban lévő aranytétel');
+      }
+    }
   }
 }
 
@@ -1932,13 +2044,16 @@ function drawDonut(segments) {
   ctx.fill();
 
   const legend = document.getElementById('donut-legend');
-  legend.innerHTML = segments.map(s => `
+  legend.innerHTML = segments.map(s => {
+    const pct = total ? (s.value/total*100) : 0;
+    return `
     <div class="legend-item">
-      <div class="legend-dot" style="background:${s.color}"></div>
+      <span style="color:${s.color};font-weight:700;font-size:11px;min-width:38px;flex-shrink:0">${pct.toFixed(1)}%</span>
       <span style="color:var(--muted)">${s.label}</span>
       <span style="margin-left:auto;font-weight:600">${fmt(s.value)}</span>
     </div>
-  `).join('');
+  `;
+  }).join('');
 }
 
 function renderAll() {

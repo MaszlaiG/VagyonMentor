@@ -78,7 +78,7 @@
       </div>
     </div>
     <div class="card">
-      <div class="card-title">Gyors Státusz</div>
+      <div class="card-title">Közelgő Fontos Dátumok</div>
       <div id="quick-status"></div>
     </div>
     <div class="card" style="border-color:rgba(245,158,11,0.4);box-shadow:0 0 0 1px rgba(245,158,11,0.15)">
@@ -103,7 +103,10 @@
   <div id="dash-stocks" class="grid g4" style="margin-bottom:24px"></div>
 
   <div class="section-title" style="font-size:14px;margin-bottom:12px">Befektetési arany</div>
-  <div id="dash-gold" class="grid g4"></div>
+  <div id="dash-gold" class="grid g4" style="margin-bottom:24px"></div>
+
+  <div class="section-title" style="font-size:14px;margin-bottom:12px">Zálogban lévő arany</div>
+  <div id="dash-gold-pledged" class="grid g4"></div>
 </div>
 
 <div class="tab-content" id="tab-portfolio">
@@ -407,6 +410,10 @@
           <div>
             <label>Aranytétel(ek) — fedezet (több is választható)</label>
             <div id="pl-gold" style="max-height:160px;overflow-y:auto;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:4px"></div>
+          </div>
+          <div>
+            <label>Zálogjegy sorszáma</label>
+            <input type="text" id="pl-ticket" placeholder="pl. 123456/2026">
           </div>
           <div>
             <label>Kölcsön összeg (Ft)</label>
