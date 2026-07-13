@@ -950,7 +950,7 @@ function buildLoanDetailHTML(l) {
   const tableRows = rows.map(r => {
     const isNext = r.idx === firstUnpaidIdx;
     let rowStyle = '';
-    if (isNext) rowStyle = 'background:rgba(34,211,238,0.06);';
+    if (isNext) rowStyle = 'background:rgba(60,122,140,0.08);';
     else if (r.isPaid) rowStyle = 'opacity:0.55;';
     let statusBadge;
     if (r.isPaid) {
@@ -1477,7 +1477,7 @@ function renderPledges() {
       : `<button class="btn btn-sm" onclick="openRedeemModal('${p.id}')">Kiváltás</button>`;
 
     const redeemRow = redeemed
-      ? `<div class="alert" style="margin:0 0 16px;color:var(--purple);background:rgba(167,139,250,0.08);border-color:rgba(167,139,250,0.25)">
+      ? `<div class="alert" style="margin:0 0 16px;color:var(--purple);background:rgba(139,105,143,0.09);border-color:rgba(139,105,143,0.3)">
            ✓ Kiváltva: <strong>${p.redeemedDate||'—'}</strong> &nbsp;|&nbsp; Kiváltási összeg: <strong>${fmt(p.redeemedAmount||0)}</strong>
          </div>`
       : '';
@@ -1616,15 +1616,16 @@ function serviceMonthlyCost(s) {
 
 function addService() {
   const name    = document.getElementById('sv-name').value.trim();
-  const cat     = document.getElementById('sv-cat').value;
+  const cat     = [...document.querySelectorAll('#sv-cat input:checked')].map(i => i.value);
   const amount  = parseAmount('sv-amount');
   const cycle   = document.getElementById('sv-cycle').value;
   const day     = parseInt(document.getElementById('sv-day').value)||0;
   const account = document.getElementById('sv-account').value;
   if (!name || !amount) return;
-  state.services.push({ id:uid(), name, cat, amount, cycle, day, account, active:true });
+  state.services.push({ id:uid(), name, cat, amount, cycle, day, account, active:true, priceHistory: [{ date: now(), amount }] });
   save();
   ['sv-name','sv-amount','sv-day'].forEach(id => document.getElementById(id).value = '');
+  document.querySelectorAll('#sv-cat input:checked').forEach(i => i.checked = false);
   closeModal('service-modal');
   renderServices();
   renderDashboard();
@@ -1671,14 +1672,19 @@ function renderServices() {
       ? `<span class="badge badge-green" style="cursor:pointer" title="Kattints a szüneteltetéshez" onclick="toggleService('${s.id}')">● Aktív</span>`
       : `<span class="badge" style="background:rgba(107,114,128,0.15);color:var(--muted);cursor:pointer" title="Kattints az aktiváláshoz" onclick="toggleService('${s.id}')">⏸ Szünetel</span>`;
     return `<tr style="${s.active?'':'opacity:0.5'}">
-      <td><strong>${s.name}</strong><br><span style="font-size:10px;color:var(--muted)">${s.cat}</span></td>
+      <td><strong>${s.name}</strong><br><span style="font-size:10px;color:var(--muted)">${Array.isArray(s.cat) ? (s.cat.join(', ') || '—') : (s.cat || '—')}</span></td>
       <td><span class="badge badge-cyan">${s.account}</span></td>
-      <td>${fmt(s.amount)}</td>
+      <td>${fmt(s.amount)}${serviceTrendBadge(s)}</td>
       <td>${CYCLE_LABEL[s.cycle]||s.cycle}</td>
       <td>${s.day ? s.day + '.' : '—'}</td>
       <td class="red">${fmt(monthly)}</td>
       <td>${statusBadge}</td>
-      <td><button class="btn btn-danger btn-sm" onclick="deleteService('${s.id}')">×</button></td>
+      <td>
+        <div class="row-actions">
+          <button class="btn btn-secondary btn-sm" onclick="openPriceModal('${s.id}')" title="Díjtörténet / áremelés-csökkenés rögzítése">📈 Díj</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteService('${s.id}')">×</button>
+        </div>
+      </td>
     </tr>`;
   }).join('') || '<tr><td colspan="8" style="color:var(--muted);text-align:center;padding:20px">Nincs rögzített előfizetés</td></tr>';
 
@@ -1691,6 +1697,81 @@ function renderServices() {
       ? `${nextDate.toLocaleDateString('hu-HU')}<br><span style="font-size:11px;color:var(--muted)">${nextName}</span>`
       : '—';
   }
+}
+
+function serviceTrendBadge(s) {
+  const hist = s.priceHistory || [];
+  if (hist.length < 2) return '';
+  const sorted = [...hist].sort((a,b) => a.date.localeCompare(b.date));
+  const prev = sorted[sorted.length-2].amount;
+  const cur = sorted[sorted.length-1].amount;
+  const diff = cur - prev;
+  if (!diff) return '';
+  const pct = prev ? (diff/prev*100) : 0;
+  const up = diff > 0;
+  const color = up ? 'var(--red)' : 'var(--accent)';
+  return `<div style="font-size:9.5px;color:${color};font-weight:600;margin-top:3px;white-space:nowrap">${up?'▲':'▼'} ${up?'+':''}${fmt(diff)} (${up?'+':''}${pct.toFixed(1)}%)</div>`;
+}
+
+let priceModalServiceId = null;
+
+function openPriceModal(id) {
+  const s = state.services.find(x => x.id === id);
+  if (!s) return;
+  priceModalServiceId = id;
+  if (!s.priceHistory || !s.priceHistory.length) {
+    s.priceHistory = [{ date: now(), amount: s.amount }];
+    save();
+  }
+  document.getElementById('price-modal-title').textContent = `Díjtörténet – ${s.name}`;
+  document.getElementById('pc-amount').value = '';
+  document.getElementById('pc-date').value = now();
+  renderPriceHistoryList(s);
+  openModal('price-modal');
+}
+
+function renderPriceHistoryList(s) {
+  const box = document.getElementById('price-history-list');
+  if (!box) return;
+  const hist = [...(s.priceHistory||[])].sort((a,b) => a.date.localeCompare(b.date));
+  box.innerHTML = `
+    <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:8px">Díjtörténet</div>
+    <div style="max-height:220px;overflow-y:auto">
+    ${hist.map((h,i) => {
+      const prev = hist[i-1];
+      let deltaHtml = '';
+      if (prev) {
+        const diff = h.amount - prev.amount;
+        if (diff !== 0) {
+          const up = diff > 0;
+          const pct = prev.amount ? (diff/prev.amount*100) : 0;
+          deltaHtml = `<span style="color:${up?'var(--red)':'var(--accent)'};font-weight:600;font-size:11px;margin-left:8px">${up?'▲':'▼'} ${up?'+':''}${fmt(diff)} (${up?'+':''}${pct.toFixed(1)}%)</span>`;
+        }
+      }
+      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--surface3);font-size:12.5px">
+        <span style="color:var(--muted)">${h.date}</span>
+        <span><strong>${fmt(h.amount)}</strong>${deltaHtml}</span>
+      </div>`;
+    }).join('') || '<div style="color:var(--muted);font-size:12px">Nincs rögzített díjtörténet</div>'}
+    </div>
+  `;
+}
+
+function addPriceChange() {
+  const s = state.services.find(x => x.id === priceModalServiceId);
+  if (!s) return;
+  const amount = parseAmount('pc-amount');
+  const date = document.getElementById('pc-date').value || now();
+  if (!amount) return;
+  if (!s.priceHistory || !s.priceHistory.length) s.priceHistory = [{ date, amount: s.amount }];
+  s.priceHistory.push({ date, amount });
+  s.priceHistory.sort((a,b) => a.date.localeCompare(b.date));
+  s.amount = s.priceHistory[s.priceHistory.length-1].amount;
+  save();
+  document.getElementById('pc-amount').value = '';
+  renderPriceHistoryList(s);
+  renderServices();
+  renderDashboard();
 }
 
 function servicesMonthlyTotal() {
@@ -1875,11 +1956,11 @@ function renderDashboard() {
   `;
 
   drawDonut([
-    { label: 'Arany', value: goldVal, color: '#f59e0b' },
-    { label: 'Részvény', value: stockVal, color: '#4ade80' },
-    { label: 'Kripto', value: cryptoOpen, color: '#22d3ee' },
-    { label: 'Zálog (−)', value: totalPledge, color: '#a78bfa' },
-    { label: 'Hitel (−)', value: totalLoan, color: '#f87171' },
+    { label: 'Arany', value: goldVal, color: '#C08A2E' },
+    { label: 'Részvény', value: stockVal, color: '#3FA36C' },
+    { label: 'Kripto', value: cryptoOpen, color: '#4FA7BD' },
+    { label: 'Zálog (−)', value: totalPledge, color: '#8B6690' },
+    { label: 'Hitel (−)', value: totalLoan, color: '#C24A3A' },
   ]);
 }
 
@@ -2040,7 +2121,7 @@ function drawDonut(segments) {
   });
   ctx.beginPath();
   ctx.arc(cx,cy,inner,0,Math.PI*2);
-  ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--surface').trim() || '#1f2330';
+  ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--surface').trim() || '#16201a';
   ctx.fill();
 
   const legend = document.getElementById('donut-legend');

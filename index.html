@@ -4,14 +4,24 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>VagyonMentor</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700;9..144,800&family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
 <header>
   <div>
-    <div class="logo">Vagyon<span>Mentor</span></div>
+    <div class="logo">
+      <svg class="logo-mark" width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="12" cy="12" r="8.6" stroke="currentColor" stroke-width="1.6"/>
+        <circle cx="12" cy="12" r="2.2" fill="currentColor"/>
+        <line x1="12" y1="2.6" x2="12" y2="5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+        <line x1="12" y1="19" x2="12" y2="21.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+        <line x1="2.6" y1="12" x2="5" y2="12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+        <line x1="19" y1="12" x2="21.4" y2="12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      Vagyon<span>Mentor</span>
+    </div>
     <div id="logged-in-as" class="logged-in-email"></div>
   </div>
   <div style="display:flex;align-items:center;gap:12px">
@@ -598,19 +608,23 @@
             <label>Szolgáltatás neve</label>
             <input type="text" id="sv-name" placeholder="pl. Netflix">
           </div>
-          <div>
-            <label>Kategória</label>
-            <select id="sv-cat">
-              <option value="Streaming">Streaming</option>
-              <option value="Zene">Zene</option>
-              <option value="Telefon">Telefon</option>
-              <option value="Internet">Internet</option>
-              <option value="Szoftver">Szoftver / Felhő</option>
-              <option value="Hosting">Hosting / Domain</option>
-              <option value="Biztosítás">Biztosítás</option>
-              <option value="Edzés">Edzés / Sport</option>
-              <option value="Egyéb">Egyéb</option>
-            </select>
+          <div style="grid-column:1/-1">
+            <label>Kategóriák (több is kiválasztható)</label>
+            <div id="sv-cat" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:6px 4px;display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:2px">
+              <label style="display:flex;align-items:center;gap:7px;padding:6px 8px;font-size:12px;cursor:pointer"><input type="checkbox" value="Víz" style="width:15px;height:15px;accent-color:var(--accent2);flex-shrink:0"><span>Víz</span></label>
+              <label style="display:flex;align-items:center;gap:7px;padding:6px 8px;font-size:12px;cursor:pointer"><input type="checkbox" value="Villany" style="width:15px;height:15px;accent-color:var(--accent2);flex-shrink:0"><span>Villany</span></label>
+              <label style="display:flex;align-items:center;gap:7px;padding:6px 8px;font-size:12px;cursor:pointer"><input type="checkbox" value="Gáz" style="width:15px;height:15px;accent-color:var(--accent2);flex-shrink:0"><span>Gáz</span></label>
+              <label style="display:flex;align-items:center;gap:7px;padding:6px 8px;font-size:12px;cursor:pointer"><input type="checkbox" value="Csatorna" style="width:15px;height:15px;accent-color:var(--accent2);flex-shrink:0"><span>Csatorna</span></label>
+              <label style="display:flex;align-items:center;gap:7px;padding:6px 8px;font-size:12px;cursor:pointer"><input type="checkbox" value="Telefon" style="width:15px;height:15px;accent-color:var(--accent2);flex-shrink:0"><span>Telefon</span></label>
+              <label style="display:flex;align-items:center;gap:7px;padding:6px 8px;font-size:12px;cursor:pointer"><input type="checkbox" value="Internet" style="width:15px;height:15px;accent-color:var(--accent2);flex-shrink:0"><span>Internet</span></label>
+              <label style="display:flex;align-items:center;gap:7px;padding:6px 8px;font-size:12px;cursor:pointer"><input type="checkbox" value="Zene" style="width:15px;height:15px;accent-color:var(--accent2);flex-shrink:0"><span>Zene</span></label>
+              <label style="display:flex;align-items:center;gap:7px;padding:6px 8px;font-size:12px;cursor:pointer"><input type="checkbox" value="Streaming" style="width:15px;height:15px;accent-color:var(--accent2);flex-shrink:0"><span>Streaming</span></label>
+              <label style="display:flex;align-items:center;gap:7px;padding:6px 8px;font-size:12px;cursor:pointer"><input type="checkbox" value="Biztosítás" style="width:15px;height:15px;accent-color:var(--accent2);flex-shrink:0"><span>Biztosítás</span></label>
+              <label style="display:flex;align-items:center;gap:7px;padding:6px 8px;font-size:12px;cursor:pointer"><input type="checkbox" value="Szoftver/Felhő" style="width:15px;height:15px;accent-color:var(--accent2);flex-shrink:0"><span>Szoftver/Felhő</span></label>
+              <label style="display:flex;align-items:center;gap:7px;padding:6px 8px;font-size:12px;cursor:pointer"><input type="checkbox" value="Hosting/Domain" style="width:15px;height:15px;accent-color:var(--accent2);flex-shrink:0"><span>Hosting/Domain</span></label>
+              <label style="display:flex;align-items:center;gap:7px;padding:6px 8px;font-size:12px;cursor:pointer"><input type="checkbox" value="Edzés/Sport" style="width:15px;height:15px;accent-color:var(--accent2);flex-shrink:0"><span>Edzés/Sport</span></label>
+              <label style="display:flex;align-items:center;gap:7px;padding:6px 8px;font-size:12px;cursor:pointer"><input type="checkbox" value="Egyéb" style="width:15px;height:15px;accent-color:var(--accent2);flex-shrink:0"><span>Egyéb</span></label>
+            </div>
           </div>
           <div>
             <label>Díj (Ft)</label>
@@ -639,6 +653,27 @@
           </div>
         </div>
         <button class="btn" onclick="addService()" style="width:100%">+ Hozzáadás</button>
+      </div>
+    </div>
+
+    <div class="modal" id="price-modal" onclick="if(event.target===this)closeModal('price-modal')">
+      <div class="modal-card" style="max-width:460px">
+        <div class="modal-head">
+          <div class="section-title" style="font-size:18px" id="price-modal-title">Díjtörténet</div>
+          <button class="btn btn-secondary btn-sm" onclick="closeModal('price-modal')">✕</button>
+        </div>
+        <div id="price-history-list" style="margin-bottom:16px"></div>
+        <div class="form-grid fg2" style="margin-bottom:12px">
+          <div>
+            <label>Új díj (Ft)</label>
+            <input type="text" inputmode="numeric" id="pc-amount" placeholder="0" oninput="formatThousands(this)">
+          </div>
+          <div>
+            <label>Hatályos dátum</label>
+            <input type="date" id="pc-date">
+          </div>
+        </div>
+        <button class="btn" onclick="addPriceChange()" style="width:100%">+ Díjváltozás rögzítése</button>
       </div>
     </div>
   </div>
@@ -749,7 +784,7 @@
         <input type="password" id="login-password" placeholder="min. 6 karakter" autocomplete="current-password">
       </div>
     </div>
-    <div id="login-error" style="color:#c0392b;font-size:12px;margin-bottom:12px;min-height:16px"></div>
+    <div id="login-error" style="color:var(--red);font-size:12px;margin-bottom:12px;min-height:16px"></div>
     <div style="display:flex;flex-direction:column;gap:10px">
       <button class="btn" onclick="loginWithEmail()" style="width:100%">Bejelentkezés</button>
       <button class="btn btn-secondary" onclick="registerWithEmail()" style="width:100%">Új fiók regisztrálása</button>
