@@ -101,6 +101,12 @@ header {
 .logged-in-email { font-size: 11px; color: var(--muted); margin-top: 2px; }
 .header-meta { color: var(--muted); font-size: 12px; font-family: var(--mono); }
 
+/* Watch (figyelő) tile grid — több oszlop, kisebb csempék */
+.watch-grid { grid-template-columns: repeat(4, 1fr); }
+@media (max-width: 1024px) { .watch-grid { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 680px)  { .watch-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 440px)  { .watch-grid { grid-template-columns: repeat(2, 1fr); } }
+
 /* NAV TABS */
 .scroll-table { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .scroll-y-fade {

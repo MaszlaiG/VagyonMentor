@@ -325,6 +325,8 @@ const now = () => toLocalDateStr(new Date());
 
 const uid = () => Math.random().toString(36).slice(2,9);
 
+
+
 const COINGECKO_ID_MAP = {
   BTC: 'bitcoin', ETH: 'ethereum', BNB: 'binancecoin', SOL: 'solana',
   XRP: 'ripple', ADA: 'cardano', DOGE: 'dogecoin', DOT: 'polkadot',
@@ -2103,16 +2105,18 @@ function renderWatch() {
 }
 
 function dashTile(title, badgeHtml, rows, footer) {
-  return `<div class="card" style="padding:16px">
-    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
-      <span style="font-family:var(--display);font-weight:700;font-size:15px">${title}</span>
+  return `<div class="card" style="padding:14px;display:flex;flex-direction:column;justify-content:space-between">
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-wrap:wrap">
+      <span style="font-family:var(--display);font-weight:700;font-size:15px;line-height:1.2">${title}</span>
       ${badgeHtml||''}
     </div>
+    <div style="flex:1">
     ${rows.map(r=>`
-      <div style="font-size:11px;color:var(--muted);margin-top:8px">${r[0]}</div>
-      <div class="${r[2]||''}" style="font-weight:600;font-size:14px">${r[1]}</div>
+      <div style="font-size:10px;color:var(--muted);margin-top:7px;text-transform:uppercase;letter-spacing:0.4px">${r[0]}</div>
+      <div class="${r[2]||''}" style="font-weight:700;font-size:16px;line-height:1.2;font-variant-numeric:tabular-nums">${r[1]}</div>
     `).join('')}
-    ${footer ? `<div style="font-size:10px;color:var(--muted);margin-top:8px">${footer}</div>` : ''}
+    </div>
+    ${footer ? `<div style="font-size:10px;color:var(--muted);margin-top:10px;padding-top:8px;border-top:1px solid var(--surface3)">${footer}</div>` : ''}
   </div>`;
 }
 
@@ -2152,7 +2156,7 @@ function drawDonut(segments) {
     const pct = total ? (s.value/total*100) : 0;
     return `
     <div class="legend-item">
-      <span style="color:${s.color};font-weight:700;font-size:11px;min-width:38px;flex-shrink:0">${pct.toFixed(1)}%</span>
+      <span style="color:${s.color};font-weight:800;font-size:13.5px;min-width:42px;flex-shrink:0;letter-spacing:-0.3px">${pct.toFixed(1)}%</span>
       <span style="color:var(--muted)">${s.label}</span>
       <span style="margin-left:auto;font-weight:600">${fmt(s.value)}</span>
     </div>
