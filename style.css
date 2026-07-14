@@ -103,6 +103,15 @@ header {
 
 /* NAV TABS */
 .scroll-table { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.scroll-y-fade {
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+}
+.scroll-y-fade::-webkit-scrollbar { width: 7px; }
+.scroll-y-fade::-webkit-scrollbar-track { background: transparent; }
+.scroll-y-fade::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 8px; }
+.scroll-y-fade::-webkit-scrollbar-thumb:hover { background: var(--accent3); }
+
 nav {
   display: flex;
   gap: 4px;

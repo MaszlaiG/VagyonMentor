@@ -384,7 +384,7 @@ async function fetchJsonViaProxies(targetUrl, timeoutMs = 6000) {
     try {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), timeoutMs);
-      const r = await fetch(proxy.build(targetUrl), { signal: controller.signal });
+      const r = await fetch(proxy.build(targetUrl), { signal: controller.signal, cache: 'no-store' });
       clearTimeout(timer);
       if (!r.ok) continue;
       const data = await proxy.parse(r);
@@ -396,9 +396,17 @@ async function fetchJsonViaProxies(targetUrl, timeoutMs = 6000) {
 
 async function fetchStockPriceHuf(ticker, currency) {
   try {
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=1d`;
-    const data = await fetchJsonViaProxies(url);
-    const price = data?.chart?.result?.[0]?.meta?.regularMarketPrice;
+    // időbélyeg a lekérdezés végén, hogy a köztes CORS-proxyk (pl. allorigins)
+    // ne egy korábban gyorsítótárazott, elavult választ adjanak vissza;
+    // két különböző Yahoo host-ot is megpróbálunk, ha az egyik akadozna
+    const hosts = ['query1.finance.yahoo.com', 'query2.finance.yahoo.com'];
+    let price = null;
+    for (const host of hosts) {
+      const url = `https://${host}/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=1d&_=${Date.now()}`;
+      const data = await fetchJsonViaProxies(url);
+      price = data?.chart?.result?.[0]?.meta?.regularMarketPrice;
+      if (price) break;
+    }
     if (!price) return null;
     if (currency === 'USD') return price * usdHuf;
     if (currency === 'EUR') {
@@ -429,12 +437,15 @@ async function refreshAllPrices() {
     });
   }
 
+  const failedTickers = [];
   for (const s of state.stocks) {
     const ticker = s.ticker.toUpperCase();
     const price = await fetchStockPriceHuf(s.ticker, s.currency);
     if (price) {
       priceCache[ticker] = { price, updatedAt: new Date().toLocaleTimeString('hu-HU') };
       s.price = price;
+    } else if (!failedTickers.includes(ticker)) {
+      failedTickers.push(ticker);
     }
   }
 
@@ -449,7 +460,12 @@ async function refreshAllPrices() {
   save();
 
   refreshing = false;
-  setRefreshStatus('✅ Frissítve: ' + new Date().toLocaleTimeString('hu-HU'));
+  const okMsg = '✅ Frissítve: ' + new Date().toLocaleTimeString('hu-HU');
+  setRefreshStatus(
+    failedTickers.length
+      ? `${okMsg} — ⚠ nem sikerült: ${failedTickers.join(', ')}`
+      : okMsg
+  );
   renderAll();
 }
 
