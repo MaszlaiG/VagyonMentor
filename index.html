@@ -10,9 +10,9 @@
 <body>
 
 <header>
-  <div>
+  <div class="header-left">
     <div class="logo">
-      <svg class="logo-mark" width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <svg class="logo-mark" width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
         <circle cx="12" cy="12" r="8.6" stroke="currentColor" stroke-width="1.6"/>
         <circle cx="12" cy="12" r="2.2" fill="currentColor"/>
         <line x1="12" y1="2.6" x2="12" y2="5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
@@ -22,11 +22,27 @@
       </svg>
       Vagyon<span>Mentor</span>
     </div>
-    <div id="logged-in-as" class="logged-in-email"></div>
   </div>
-  <div style="display:flex;align-items:center;gap:12px">
-    <button class="btn btn-secondary btn-sm" onclick="openDataModal()">💾 Adatok</button>
-    <button class="btn btn-secondary btn-sm" onclick="logout()">Kijelentkezés</button>
+
+  <nav id="main-nav" class="header-nav">
+    <button class="active" data-tab="dashboard" onclick="showTab('dashboard')">Áttekintés</button>
+    <button data-tab="watch" onclick="showTab('watch')">Figyelő</button>
+    <button data-tab="gold" onclick="showTab('gold')">Arany</button>
+    <button data-tab="pledge" onclick="showTab('pledge')">Zálog</button>
+    <button data-tab="portfolio" onclick="showTab('portfolio')">Részvény</button>
+    <button data-tab="crypto" onclick="showTab('crypto')">Kripto</button>
+    <button data-tab="loan" onclick="showTab('loan')">Hitel</button>
+    <button data-tab="services" onclick="showTab('services')">Szolgáltatások</button>
+  </nav>
+
+  <div class="header-right">
+    <div id="logged-in-as" class="logged-in-email"></div>
+    <button class="icon-btn" onclick="openDataModal()" title="Adatok exportálása / importálása">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+    </button>
+    <button class="icon-btn" onclick="logout()" title="Kijelentkezés">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+    </button>
     <div class="header-meta" id="header-date"></div>
   </div>
 </header>
@@ -38,17 +54,6 @@
     <span class="nav-toggle-caret">▾</span>
   </button>
 </div>
-
-<nav id="main-nav">
-  <button class="active" data-tab="dashboard" onclick="showTab('dashboard')">Áttekintés</button>
-  <button data-tab="watch" onclick="showTab('watch')">Interaktív figyelő</button>
-  <button data-tab="gold" onclick="showTab('gold')">Arany</button>
-  <button data-tab="pledge" onclick="showTab('pledge')">Zálog</button>
-  <button data-tab="portfolio" onclick="showTab('portfolio')">Részvény</button>
-  <button data-tab="crypto" onclick="showTab('crypto')">Kripto</button>
-  <button data-tab="loan" onclick="showTab('loan')">Hitel</button>
-  <button data-tab="services" onclick="showTab('services')">Szolgáltatások</button>
-</nav>
 
 <main>
 

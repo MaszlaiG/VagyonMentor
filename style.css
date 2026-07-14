@@ -76,30 +76,115 @@ body {
 
 /* HEADER */
 header {
-  border-bottom: 1px solid var(--border);
-  padding: 14px 32px;
-  display: flex;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
   align-items: center;
-  justify-content: space-between;
+  gap: 20px;
+  padding: 0 24px;
+  height: 54px;
   position: sticky;
   top: 0;
-  background: rgba(255,255,255,0.92);
-  backdrop-filter: blur(10px);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: blur(12px);
   z-index: 100;
 }
+html.dark header { background: rgba(22,32,26,0.97); }
+
+.header-left { display: flex; align-items: center; }
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
 .logo {
   font-family: var(--display);
-  font-size: 19px;
+  font-size: 17px;
   font-weight: 700;
   letter-spacing: -0.3px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
+  white-space: nowrap;
 }
 .logo span { color: var(--primary); }
 .logo-mark { color: var(--accent3); flex-shrink: 0; }
-.logged-in-email { font-size: 11px; color: var(--muted); margin-top: 2px; }
-.header-meta { color: var(--muted); font-size: 12px; font-family: var(--mono); }
+.logged-in-email {
+  font-size: 10.5px;
+  color: var(--muted);
+  font-family: var(--mono);
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-right: 2px;
+}
+.header-meta {
+  color: var(--muted);
+  font-size: 11px;
+  font-family: var(--mono);
+  white-space: nowrap;
+}
+
+/* Ikon-gombok a fejléc jobb oldalán */
+.icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 0.14s, color 0.14s, border-color 0.14s;
+  flex-shrink: 0;
+}
+.icon-btn:hover { background: var(--surface2); color: var(--text); border-color: var(--border2); }
+
+/* Pill nav — header közepén */
+.header-nav {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 3px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  justify-self: center;
+  max-width: 100%;
+}
+.header-nav::-webkit-scrollbar { display: none; }
+.header-nav button {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-family: var(--ui);
+  font-size: 12.5px;
+  font-weight: 500;
+  padding: 5px 12px;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: background 0.14s, color 0.14s, box-shadow 0.14s;
+  white-space: nowrap;
+  flex-shrink: 0;
+  line-height: 1.4;
+}
+.header-nav button.active {
+  background: var(--surface);
+  color: var(--primary);
+  font-weight: 700;
+  box-shadow: 0 1px 4px rgba(28,42,31,0.12), 0 0 0 1px var(--border);
+}
+html.dark .header-nav button.active {
+  box-shadow: 0 1px 4px rgba(0,0,0,0.4), 0 0 0 1px var(--border2);
+}
+.header-nav button:hover:not(.active) { background: var(--surface); color: var(--text); }
 
 /* Watch (figyelő) tile grid — több oszlop, kisebb csempék */
 .watch-grid { grid-template-columns: repeat(4, 1fr); }
@@ -117,32 +202,6 @@ header {
 .scroll-y-fade::-webkit-scrollbar-track { background: transparent; }
 .scroll-y-fade::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 8px; }
 .scroll-y-fade::-webkit-scrollbar-thumb:hover { background: var(--accent3); }
-
-nav {
-  display: flex;
-  gap: 4px;
-  padding: 10px 28px 0;
-  border-bottom: 1px solid var(--border);
-  background: var(--surface);
-  overflow-x: auto;
-  scrollbar-width: thin;
-}
-nav button {
-  background: none;
-  border: none;
-  color: var(--muted);
-  font-family: var(--ui);
-  font-size: 13px;
-  font-weight: 500;
-  padding: 9px 14px 11px;
-  cursor: pointer;
-  border-bottom: 2px solid transparent;
-  border-radius: 6px 6px 0 0;
-  transition: color .15s, background .15s, border-color .15s;
-  white-space: nowrap;
-}
-nav button.active { color: var(--primary); border-bottom-color: var(--accent3); font-weight: 600; }
-nav button:hover:not(.active) { color: var(--text); background: var(--surface2); }
 
 /* MOBIL MENÜSÁV (alapból rejtve, csak telefonon jelenik meg) */
 .nav-mobile-bar { display: none; }
@@ -481,8 +540,8 @@ body.mode-business nav button[data-mode="private"] { display: none; }
    ============================================================ */
 @media (max-width: 1024px) {
   main { padding: 20px; }
-  header { padding: 12px 20px; }
-  nav { padding: 10px 20px 0; }
+  header { padding: 0 20px; gap: 14px; }
+  .header-meta { display: none; }
 
   .g4 { grid-template-columns: repeat(2, 1fr); }
   .g3 { grid-template-columns: repeat(2, 1fr); }
@@ -495,47 +554,44 @@ body.mode-business nav button[data-mode="private"] { display: none; }
 @media (max-width: 680px) {
   body { -webkit-text-size-adjust: 100%; }
 
-  /* FEJLÉC */
-  header { padding: 12px 14px; }
-  header > div { flex-wrap: wrap; justify-content: flex-end; row-gap: 8px; }
-  .logo { font-size: 17px; }
-  .header-meta { font-size: 10px; text-align: right; }
-  .mode-switch button { padding: 5px 9px; font-size: 11px; }
+  /* FEJLÉC — csak logó + ikon-gombok, nav eltűnik */
+  header {
+    grid-template-columns: auto auto;
+    justify-content: space-between;
+    padding: 0 14px;
+    height: 52px;
+  }
+  .header-nav { display: none; }
+  .logo { font-size: 16px; gap: 6px; }
+  .logged-in-email { display: none; }
+  .header-meta { display: none; }
 
   /* NAVIGÁCIÓ — legördülő menü hamburger gombbal */
   .nav-mobile-bar {
     display: block;
-    padding: 12px 14px 0;
+    padding: 10px 14px 0;
   }
   .nav-toggle .nav-current { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-  nav {
-    display: none;
+  .header-nav.open {
+    display: flex;
     flex-direction: column;
-    gap: 0;
-    padding: 8px 14px 0;
-    border-bottom: none;
-    background: transparent;
-    overflow: visible;
+    position: absolute;
+    top: 52px;
+    left: 0; right: 0;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    border-radius: 0;
+    padding: 6px 10px 10px;
+    z-index: 200;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.12);
   }
-  nav.open { display: flex; }
-  nav button {
+  .header-nav.open button {
     width: 100%;
     text-align: left;
-    padding: 13px 14px;
+    padding: 11px 14px;
     font-size: 14px;
-    border-bottom: 1px solid var(--border);
-    border-left: 2px solid transparent;
-    border-radius: 0;
-    background: var(--surface);
-  }
-  nav button:first-child { border-top: 1px solid var(--border); border-radius: 9px 9px 0 0; }
-  nav button:last-child { border-radius: 0 0 9px 9px; }
-  nav button.active {
-    color: var(--primary);
-    border-bottom-color: var(--border);
-    border-left-color: var(--accent3);
-    background: var(--surface2);
+    border-radius: 8px;
   }
 
   /* FŐ TARTALOM */

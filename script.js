@@ -485,13 +485,12 @@ function getLiveUpdatedAt(ticker) {
 
 function showTab(id) {
   document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.header-nav button').forEach(b => b.classList.remove('active'));
   const tab = document.getElementById('tab-' + id);
   if (tab) tab.classList.add('active');
-  const activeBtn = document.querySelector('nav button[data-tab="' + id + '"]');
+  const activeBtn = document.querySelector('.header-nav button[data-tab="' + id + '"]');
   if (activeBtn) {
     activeBtn.classList.add('active');
-    // mobil: aktuális fül nevének frissítése
     const label = document.getElementById('nav-current-label');
     if (label) label.textContent = activeBtn.textContent.trim();
   }
