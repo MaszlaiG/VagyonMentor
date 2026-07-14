@@ -314,7 +314,14 @@ function parseAmount(id) {
   return parseFloat(digits) || 0;
 }
 
-const now = () => new Date().toISOString().slice(0,10);
+function toLocalDateStr(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const day = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+
+const now = () => toLocalDateStr(new Date());
 
 const uid = () => Math.random().toString(36).slice(2,9);
 
@@ -881,7 +888,7 @@ function calcLoanEndDate() {
   const tmp = { start, months, payday };
   const first = getFirstPaymentDate(tmp);
   const last = getPaymentDate(tmp, months - 1);
-  const endStr = last.toISOString().slice(0,10);
+  const endStr = toLocalDateStr(last);
   document.getElementById('ln-end').value = endStr;
   document.getElementById('ln-end-info').innerHTML =
     `Első törlesztő: <strong>${first.toLocaleDateString('hu-HU')}</strong><br>Lejárat: <strong>${last.toLocaleDateString('hu-HU')}</strong>`;
@@ -1100,7 +1107,7 @@ function addLoan() {
   const monthly = parseAmount('ln-monthly');
   if (!name || !orig) return;
   const tmp = { start, months, payday };
-  const end = (start && months) ? getPaymentDate(tmp, months - 1).toISOString().slice(0,10)
+  const end = (start && months) ? toLocalDateStr(getPaymentDate(tmp, months - 1))
                                 : document.getElementById('ln-end').value;
   state.loans.push({ id:uid(), name, orig, start, months, payday, freq, rate, thm, monthly, end });
   save();
@@ -1255,7 +1262,7 @@ function pledgeAddMonths(dateStr, months) {
 }
 
 function pledgeAddDays(dateStr, days) {
-  const d = new Date(dateStr);
+  const d = new Date(dateStr + 'T00:00:00');
   if (isNaN(d)) return null;
   d.setDate(d.getDate() + days);
   return d;
@@ -1269,7 +1276,7 @@ function calcPledgeEndDate() {
   if (!start || !days) { endEl.value = ''; info.textContent = ''; return; }
   const end = pledgeAddDays(start, days);
   if (end) {
-    endEl.value = end.toISOString().slice(0,10);
+    endEl.value = toLocalDateStr(end);
     info.textContent = `Lejárat: ${end.toLocaleDateString('hu-HU')} (${days} nap futamidő)`;
   }
 }
@@ -1333,7 +1340,7 @@ function addPledge() {
     return g ? g.name : '—';
   });
   const endD = pledgeAddDays(start, days);
-  const end = endD ? endD.toISOString().slice(0,10) : '';
+  const end = endD ? toLocalDateStr(endD) : '';
   state.pledges.push({ id:uid(), goldIds, goldNames, ticketNo, principal, feePct, start, days, rate, end });
   save();
   ['pl-principal','pl-fee','pl-rate','pl-end','pl-ticket'].forEach(id => {
@@ -1810,7 +1817,7 @@ function buildUpcomingDatesHTML() {
     for (let i=0; i<l.months; i++) {
       if (!paidSet[i+1]) {
         const d = getPaymentDate(l, i);
-        const dateStr = d.toISOString().slice(0,10);
+        const dateStr = toLocalDateStr(d);
         const days = daysUntil(dateStr);
         if (days <= 7) {
           items.push({
@@ -1832,7 +1839,7 @@ function buildUpcomingDatesHTML() {
   state.services.filter(s => s.active && s.day).forEach(s => {
     const nd = nextChargeDate(s.day);
     if (nd) {
-      const dateStr = nd.toISOString().slice(0,10);
+      const dateStr = toLocalDateStr(nd);
       const days = daysUntil(dateStr);
       if (days <= 7) {
         items.push({
