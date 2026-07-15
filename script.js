@@ -1347,7 +1347,7 @@ const FREQ_LABEL = { monthly: 'Havi', quarterly: 'Negyedéves', yearly: 'Éves' 
 
 function renderLoans() {
   const container = document.getElementById('loan-cards');
-  let totalRemain = 0, totalMonthly = 0;
+  let totalRemain = 0, totalMonthly = 0, sumOrig = 0, sumRepayAll = 0;
 
   if (!state.loans.length) {
     container.innerHTML = '<div class="card" style="color:var(--muted);text-align:center;padding:32px">Nincs rögzített hitel</div>';
@@ -1359,6 +1359,8 @@ function renderLoans() {
       const paidCount = Object.keys(state.paidInstallments[l.id] || {}).length;
       totalRemain  += remain;
       totalMonthly += l.monthly;
+      sumOrig      += l.orig;
+      sumRepayAll  += l.monthly * l.months;
 
       let nextPayment = '—';
       const paidSet = state.paidInstallments[l.id] || {};
@@ -1434,7 +1436,14 @@ function renderLoans() {
   document.getElementById('ln-sum-remain').textContent = fmt(totalRemain);
   document.getElementById('ln-sum-monthly').textContent = fmt(totalMonthly);
   document.getElementById('ln-sum-yearly').textContent = fmt(totalMonthly * 12);
-  document.getElementById('ln-sum-count').textContent = state.loans.length + ' db';
+  // Hitelek díja: felvett − teljes visszafizetendő; alatta: felvett − jelenlegi tartozás
+  const lnFeeTotal = sumOrig - sumRepayAll;
+  const lnFeeSoFar = sumOrig - totalRemain;
+  const lnFeeEl = document.getElementById('ln-sum-fee');
+  lnFeeEl.textContent = fmt(lnFeeTotal);
+  lnFeeEl.className = 'stat-value ' + (lnFeeTotal < 0 ? 'red' : 'green');
+  const lnFeeSubEl = document.getElementById('ln-sum-fee-sofar');
+  if (lnFeeSubEl) lnFeeSubEl.textContent = `Eddig: ${fmt(lnFeeSoFar)}`;
 }
 
 const PURITY_FACTOR = { '999.9': 0.9999, '916': 0.916, '750': 0.750, '585': 0.585, 'egyéb': 1 };
