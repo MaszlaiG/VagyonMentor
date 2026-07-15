@@ -799,5 +799,5 @@ html.dark .auth-card { box-shadow: 0 24px 64px rgba(0,0,0,0.5); }
   .g4 { grid-template-columns: 1fr; }
   .stat-value { font-size: 24px; }
   main { padding: 14px 12px 40px; }
-  .header-meta { display: none; }
+  .header-meta { font-size: 9px; }
 }
