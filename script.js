@@ -1037,10 +1037,6 @@ function renderCrypto() {
     totalFees += c.fees;
   });
 
-  const el = document.getElementById('cr-realized');
-  el.textContent = fmt(totalRealized);
-  el.className = 'stat-value ' + (totalRealized>=0?'green':'red');
-  document.getElementById('cr-realized-card').className = 'card ' + (totalRealized>=0?'card-stat-green':'card-stat-red');
   document.getElementById('cr-open').textContent = fmt(totalOpen);
   const totalPL = totalRealized + (totalLiveOpen - totalOpen);
   const plEl = document.getElementById('cr-pl');
@@ -2269,7 +2265,6 @@ function renderWatch() {
         const unreal = liveVal!==null ? liveVal-openCost : null;
         const badge = live ? `<span class="badge badge-green">● élő</span>` : '';
         const rows = [
-          ['Realizált P&L', fmt(c.realized), c.realized>=0?'green':'red'],
           ['Nyitott pozíció (bekerülési)', fmt(openCost), ''],
         ];
         if (liveVal!==null) {
@@ -2302,7 +2297,7 @@ function renderWatch() {
 
     const goldTile = (a, pledgeBadge) => {
       const pl = a.val - a.cost;
-      const title = `${a.name}${a.count>1?` <span class="badge badge-yellow">${a.count} db</span>`:''}`;
+      const title = `${a.name}`;
       return dashTile(title, pledgeBadge||'', [
         ['Darab', `${a.count} db (${fmtNum(a.grams)} g/db)`, ''],
         ['Össztömeg', `${fmtNum(a.totalGrams)} g`, ''],
@@ -2324,8 +2319,20 @@ function renderWatch() {
     if (goldPledgedBox) {
       const pledgedItems = state.goldItems.filter(g => pledgedSet.has(g.id));
       if (pledgedItems.length) {
-        const badge = `<span class="badge badge-purple">zálogban</span>`;
-        goldPledgedBox.innerHTML = Object.values(buildAgg(pledgedItems)).map(a => goldTile(a, badge)).join('');
+        // zálogjegyenként aggregálunk, hogy a csempén a helyes sorszám legyen
+        const agg = {};
+        pledgedItems.forEach(g => {
+          const ticket = pledgeTicketForGold(g.id) || '—';
+          const k = `${g.name}|${g.grams}|${g.purity}|${g.form}|${ticket}`;
+          if (!agg[k]) agg[k] = { name:g.name, grams:g.grams, count:0, totalGrams:0, cost:0, val:0, ticket };
+          agg[k].count++;
+          agg[k].totalGrams += g.grams;
+          agg[k].cost += g.cost;
+          agg[k].val += goldItemValue(g, spot);
+        });
+        goldPledgedBox.innerHTML = Object.values(agg).map(a =>
+          goldTile(a, `<span class="badge badge-purple">${escHtml(a.ticket)}</span>`)
+        ).join('');
       } else {
         goldPledgedBox.innerHTML = emptyTile('Nincs zálogban lévő aranytétel');
       }
