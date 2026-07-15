@@ -1759,7 +1759,14 @@ function renderPledges() {
   document.getElementById('pl-sum-cash').textContent = fmt(sumCash);
   document.getElementById('pl-sum-debt').textContent = fmt(sumDebt);
   document.getElementById('pl-sum-repay').textContent = fmt(sumRepay);
-  document.getElementById('pl-sum-count').textContent = activeCount + ' db';
+  // Zálog díja: kapott − visszafizetendő; alatta: kapott − jelenlegi tartozás
+  const feeTotal = sumCash - sumRepay;
+  const feeSoFar = sumCash - sumDebt;
+  const feeEl = document.getElementById('pl-sum-fee');
+  feeEl.textContent = fmt(feeTotal);
+  feeEl.className = 'stat-value ' + (feeTotal < 0 ? 'red' : 'green');
+  const feeSubEl = document.getElementById('pl-sum-fee-sofar');
+  if (feeSubEl) feeSubEl.textContent = `Eddig: ${fmt(feeSoFar)}`;
 }
 
 async function fetchGoldSpotHuf() {
