@@ -1042,7 +1042,11 @@ function renderCrypto() {
   el.className = 'stat-value ' + (totalRealized>=0?'green':'red');
   document.getElementById('cr-realized-card').className = 'card ' + (totalRealized>=0?'card-stat-green':'card-stat-red');
   document.getElementById('cr-open').textContent = fmt(totalOpen);
-  document.getElementById('cr-fees').textContent = fmt(totalFees);
+  const totalPL = totalRealized + (totalLiveOpen - totalOpen);
+  const plEl = document.getElementById('cr-pl');
+  plEl.textContent = (totalPL>=0?'+':'') + fmt(totalPL);
+  plEl.className = 'stat-value ' + (totalPL>=0?'green':'red');
+  document.getElementById('cr-pl-card').className = 'card ' + (totalPL>=0?'card-stat-green':'card-stat-red');
 
   const liveOpenEl = document.getElementById('cr-live-open');
   if (liveOpenEl) {
