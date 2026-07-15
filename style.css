@@ -694,38 +694,43 @@ html.dark .auth-card { box-shadow: 0 24px 64px rgba(0,0,0,0.5); }
   }
   .header-meta {
     display: block;
-    font-size: 10.5px;
+    font-size: 10px;
     color: var(--muted);
     white-space: nowrap;
+    font-family: var(--mono);
+    text-align: right;
+    line-height: 1.3;
   }
   .hamburger-btn { display: flex; }
 
-  /* DROPDOWN MENÜ — a header alól nyílik le */
+  /* DROPDOWN MENÜ — jobb széléhez igazítva, a header alól nyílik le */
   #main-nav.open {
     display: flex !important;
     flex-direction: column;
     position: fixed;
     top: 52px;
-    left: 0;
-    right: 0;
+    right: 12px;
+    left: auto;
+    width: 220px;
     background: var(--surface);
-    border-bottom: 1px solid var(--border);
-    padding: 6px 12px 12px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 6px;
     z-index: 500;
-    box-shadow: 0 12px 32px rgba(0,0,0,0.14);
-    animation: navSlideDown 0.22s cubic-bezier(0.2,0,0,1) both;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.16), 0 2px 8px rgba(0,0,0,0.08);
+    animation: navSlideDown 0.2s cubic-bezier(0.2,0,0,1) both;
   }
   @keyframes navSlideDown {
-    from { opacity: 0; transform: translateY(-10px); }
-    to   { opacity: 1; transform: translateY(0); }
+    from { opacity: 0; transform: translateY(-8px) scale(0.97); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
   }
   #main-nav.open button {
     width: 100%;
     text-align: left;
-    padding: 12px 14px;
-    font-size: 14.5px;
+    padding: 11px 14px;
+    font-size: 14px;
     font-weight: 500;
-    border-radius: 9px;
+    border-radius: 8px;
     color: var(--muted);
     background: none;
     border: none;
@@ -733,13 +738,11 @@ html.dark .auth-card { box-shadow: 0 24px 64px rgba(0,0,0,0.5); }
     cursor: pointer;
     transition: background 0.12s, color 0.12s;
   }
-  #main-nav.open button:hover,
+  #main-nav.open button:hover { background: var(--surface2); color: var(--text); }
   #main-nav.open button.active {
     background: var(--surface2);
     color: var(--primary);
     font-weight: 700;
-  }
-  #main-nav.open button.active {
     border-left: 3px solid var(--accent3);
     padding-left: 11px;
   }

@@ -2271,7 +2271,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const gdDate = document.getElementById('gd-date'); if (gdDate) gdDate.value = now();
   const plStart = document.getElementById('pl-start'); if (plStart) { plStart.value = now(); calcPledgeEndDate(); }
   const hd = document.getElementById('header-date');
-  if (hd) hd.textContent = new Date().toLocaleDateString('hu-HU', {year:'numeric',month:'long',day:'numeric',weekday:'long'});
+  if (hd) {
+    const d = new Date();
+    const dateLine = d.toLocaleDateString('hu-HU', { year: 'numeric', month: 'long', day: 'numeric' });
+    const dayLine  = d.toLocaleDateString('hu-HU', { weekday: 'long' });
+    hd.innerHTML = `<span style="display:block">${dateLine}</span><span style="display:block;opacity:0.7">${dayLine}</span>`;
+  }
 
   showTab('dashboard');
 });
