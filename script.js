@@ -50,6 +50,12 @@ auth.onAuthStateChanged(user => {
     const userLabel = document.getElementById('logged-in-as');
     if (userLabel) userLabel.textContent = user.email || '';
 
+    // Fiók oldal mezők feltöltése
+    const accName = document.getElementById('acc-name');
+    const accEmail = document.getElementById('acc-email');
+    if (accName) accName.value = user.displayName || '';
+    if (accEmail) accEmail.value = user.email || '';
+
     migrateLocalDataIfNeeded().finally(() => {
       load().then(() => {
         normalizeState();
@@ -78,21 +84,27 @@ function loginWithEmail() {
 }
 
 function registerWithEmail() {
-  const email = document.getElementById('login-email').value.trim();
-  const pass = document.getElementById('login-password').value;
-  const loginError = document.getElementById('login-error');
-  if (!email || !pass) {
-    if (loginError) loginError.textContent = 'Add meg az e-mail címet és a jelszót.';
-    return;
-  }
-  if (pass.length < 6) {
-    if (loginError) loginError.textContent = 'A jelszónak legalább 6 karakternek kell lennie.';
-    return;
-  }
+  const email = document.getElementById('reg-email').value.trim();
+  const pass  = document.getElementById('reg-password').value;
+  const pass2 = document.getElementById('reg-password2').value;
+  const err   = document.getElementById('reg-error');
+  if (!email || !pass) { if (err) err.textContent = 'Add meg az e-mail címet és a jelszót.'; return; }
+  if (pass.length < 6) { if (err) err.textContent = 'A jelszónak legalább 6 karakternek kell lennie.'; return; }
+  if (pass !== pass2)  { if (err) err.textContent = 'A két jelszó nem egyezik.'; return; }
   auth.createUserWithEmailAndPassword(email, pass)
-    .catch(err => {
-      if (loginError) loginError.textContent = hibaSzoveg(err);
-    });
+    .catch(e => { if (err) err.textContent = hibaSzoveg(e); });
+}
+
+function authSlideTo(panel) {
+  const slider = document.getElementById('auth-slider');
+  if (!slider) return;
+  if (panel === 'register') {
+    slider.style.transform = 'translateX(-50%)';
+    document.getElementById('login-error').textContent = '';
+  } else {
+    slider.style.transform = 'translateX(0)';
+    document.getElementById('reg-error').textContent = '';
+  }
 }
 
 function logout() {
@@ -105,10 +117,71 @@ function hibaSzoveg(err) {
     case 'auth/invalid-email': return 'Érvénytelen e-mail cím.';
     case 'auth/user-not-found': return 'Nincs ilyen felhasználó — regisztrálj előbb.';
     case 'auth/wrong-password': return 'Hibás jelszó.';
+    case 'auth/invalid-credential': return 'Hibás e-mail cím vagy jelszó.';
     case 'auth/email-already-in-use': return 'Ez az e-mail cím már regisztrálva van — jelentkezz be.';
     case 'auth/weak-password': return 'Túl gyenge jelszó (min. 6 karakter).';
+    case 'auth/requires-recent-login': return 'A művelethez nemrégiben kell bejelentkezni. Jelentkezz ki, majd be újra.';
     default: return 'Hiba történt: ' + err.message;
   }
+}
+
+function accMsg(id, text, isError) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = text;
+  el.style.color = isError ? 'var(--red)' : 'var(--accent)';
+  if (text) setTimeout(() => { el.textContent = ''; }, 5000);
+}
+
+async function updateProfile() {
+  const user = auth.currentUser;
+  if (!user) return;
+  const name  = (document.getElementById('acc-name').value  || '').trim();
+  const email = (document.getElementById('acc-email').value || '').trim();
+  if (!email) { accMsg('acc-profile-msg', 'Az e-mail cím nem lehet üres.', true); return; }
+  try {
+    const promises = [];
+    if (name !== (user.displayName || '')) {
+      promises.push(user.updateProfile({ displayName: name }));
+    }
+    if (email !== user.email) {
+      promises.push(user.updateEmail(email));
+    }
+    await Promise.all(promises);
+    const userLabel = document.getElementById('logged-in-as');
+    if (userLabel) userLabel.textContent = auth.currentUser.email || '';
+    accMsg('acc-profile-msg', '✓ Adatok elmentve.', false);
+  } catch (err) {
+    accMsg('acc-profile-msg', hibaSzoveg(err), true);
+  }
+}
+
+async function updatePassword() {
+  const user = auth.currentUser;
+  if (!user) return;
+  const cur   = document.getElementById('acc-cur-pass').value;
+  const next  = document.getElementById('acc-new-pass').value;
+  const next2 = document.getElementById('acc-new-pass2').value;
+  if (!cur || !next) { accMsg('acc-pass-msg', 'Töltsd ki az összes jelszómezőt.', true); return; }
+  if (next !== next2) { accMsg('acc-pass-msg', 'A két új jelszó nem egyezik.', true); return; }
+  if (next.length < 6) { accMsg('acc-pass-msg', 'Az új jelszónak min. 6 karakternek kell lennie.', true); return; }
+  try {
+    // Újrahitelesítés a jelenlegi jelszóval
+    const cred = firebase.auth.EmailAuthProvider.credential(user.email, cur);
+    await user.reauthenticateWithCredential(cred);
+    await user.updatePassword(next);
+    document.getElementById('acc-cur-pass').value = '';
+    document.getElementById('acc-new-pass').value = '';
+    document.getElementById('acc-new-pass2').value = '';
+    accMsg('acc-pass-msg', '✓ Jelszó sikeresen módosítva.', false);
+  } catch (err) {
+    accMsg('acc-pass-msg', hibaSzoveg(err), true);
+  }
+}
+
+function switchAccount() {
+  if (!confirm('A fiókváltáshoz kijelentkeztetünk — utána más fiókkal is bejelentkezhetsz. Folytatod?')) return;
+  auth.signOut();
 }
 
 /* Egyszeri migráció: ha van régi localStorage adat és a Firestore-ban
