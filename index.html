@@ -730,7 +730,20 @@
       </div>
     </div>
 
-    <div class="modal" id="price-modal-REMOVED" style="display:none"></div>
+    <div class="modal" id="price-modal" onclick="if(event.target===this)closeModal('price-modal')">
+      <div class="modal-card" style="max-width:420px">
+        <div class="modal-head">
+          <div class="section-title" style="font-size:18px">Ár módosítása</div>
+          <button class="btn btn-secondary btn-sm" onclick="closeModal('price-modal')">✕</button>
+        </div>
+        <div id="pc-service-name" style="font-size:12px;color:var(--muted);margin-bottom:14px"></div>
+        <div style="margin-bottom:16px">
+          <label>Új díj (Ft)</label>
+          <input type="text" inputmode="numeric" id="pc-amount" placeholder="0" oninput="formatThousands(this)">
+        </div>
+        <button class="btn" onclick="savePrice()" style="width:100%">Mentés</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -780,51 +793,28 @@
         <button class="btn" onclick="updateProfile()">Adatok mentése</button>
       </div>
 
-      <!-- ADÓZÁS -->
+      <!-- JELSZÓ -->
       <div class="card">
-        <div class="card-title">Adózás</div>
-        <p style="color:var(--muted);font-size:11px;margin-bottom:14px;line-height:1.5">
-          Az osztalék utáni, illetve az eszközök (részvény, kripto, arany) eladásából származó nyereség adókulcsai. A részvényeknél az éves osztalék nettó (adózás utáni) értéke ezekből számolódik.
-        </p>
-        <div class="form-grid fg3" style="margin-bottom:16px">
+        <div class="card-title">Jelszó módosítása</div>
+        <div class="form-grid" style="margin-bottom:16px">
           <div>
-            <label>SZJA (%)</label>
-            <input type="number" id="acc-szja" step="0.1" placeholder="15">
+            <label>Jelenlegi jelszó</label>
+            <input type="password" id="acc-cur-pass" placeholder="••••••••" autocomplete="current-password">
           </div>
           <div>
-            <label>SZOCHO (%)</label>
-            <input type="number" id="acc-szocho" step="0.1" placeholder="13">
+            <label>Új jelszó</label>
+            <input type="password" id="acc-new-pass" placeholder="min. 6 karakter" autocomplete="new-password">
           </div>
           <div>
-            <label>USA osztalékdíj (%)</label>
-            <input type="number" id="acc-usfee" step="0.1" placeholder="15">
+            <label>Új jelszó megerősítése</label>
+            <input type="password" id="acc-new-pass2" placeholder="min. 6 karakter" autocomplete="new-password">
           </div>
         </div>
-        <div id="acc-tax-msg" style="min-height:18px;font-size:12px;margin-bottom:12px"></div>
-        <button class="btn" onclick="saveTaxSettings()">Adókulcsok mentése</button>
+        <div id="acc-pass-msg" style="min-height:18px;font-size:12px;margin-bottom:12px"></div>
+        <button class="btn" onclick="updatePassword()">Jelszó módosítása</button>
       </div>
     </div>
 
-    <!-- JELSZÓ -->
-    <div class="card" style="margin-bottom:16px">
-      <div class="card-title">Jelszó módosítása</div>
-      <div class="form-grid fg3" style="margin-bottom:16px">
-        <div>
-          <label>Jelenlegi jelszó</label>
-          <input type="password" id="acc-cur-pass" placeholder="••••••••" autocomplete="current-password">
-        </div>
-        <div>
-          <label>Új jelszó</label>
-          <input type="password" id="acc-new-pass" placeholder="min. 6 karakter" autocomplete="new-password">
-        </div>
-        <div>
-          <label>Új jelszó megerősítése</label>
-          <input type="password" id="acc-new-pass2" placeholder="min. 6 karakter" autocomplete="new-password">
-        </div>
-      </div>
-      <div id="acc-pass-msg" style="min-height:18px;font-size:12px;margin-bottom:12px"></div>
-      <button class="btn" onclick="updatePassword()">Jelszó módosítása</button>
-    </div>
 
     <div class="grid g2" style="margin-bottom:16px">
       <!-- ADATKEZELÉS -->

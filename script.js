@@ -220,7 +220,6 @@ let state = {
   bizExpense: [],
   orders: [],
   bizTaxRate: 15,
-  tax: { szja: 15, szocho: 13, usFee: 15 },
   paidInstallments: {}
 };
 
@@ -254,7 +253,6 @@ function normalizeState() {
   if (!state.loans) state.loans = [];
   if (!state.goldSpot) state.goldSpot = (state.gold && state.gold.pricePerGram) || 28000;
   if (!state.services) state.services = [];
-  if (!state.tax) state.tax = { szja: 15, szocho: 13, usFee: 15 };
   if (state.usdHuf) usdHuf = state.usdHuf;
   if (state.eurHuf) eurHuf = state.eurHuf;
   if (state.fxUpdatedAt) fxUpdatedAt = state.fxUpdatedAt;
@@ -350,29 +348,6 @@ function resetAllData() {
   db.collection('vaults').doc(currentUid).set(reset, { merge: true })
     .catch(e => console.error('[VagyonMentor] reset error:', e))
     .finally(() => location.reload());
-}
-
-/* ---- Adózás beállítások (Fiók → Adózás) ---- */
-function populateTaxFields() {
-  const t = state.tax || {};
-  const set = (id, val) => { const el = document.getElementById(id); if (el && document.activeElement !== el) el.value = (val ?? ''); };
-  set('acc-szja',   t.szja   ?? 15);
-  set('acc-szocho', t.szocho ?? 13);
-  set('acc-usfee',  t.usFee  ?? 15);
-}
-
-function saveTaxSettings() {
-  const num = (id, def) => { const v = parseFloat(document.getElementById(id).value); return isFinite(v) ? v : def; };
-  state.tax = {
-    szja:   num('acc-szja', 15),
-    szocho: num('acc-szocho', 13),
-    usFee:  num('acc-usfee', 15),
-  };
-  save();
-  const msg = document.getElementById('acc-tax-msg');
-  if (msg) { msg.style.color = 'var(--accent)'; msg.textContent = '✓ Adókulcsok elmentve.'; setTimeout(() => { msg.textContent = ''; }, 2500); }
-  renderStocks();
-  renderDashboard();
 }
 
 const fmt = n => {
@@ -836,21 +811,6 @@ function stockDivFreqLabel(s) {
     return 'Negyedévente (' + set.map(m => MONTH_ABBR[m]).join(', ') + ')';
   }
   return 'Évente';
-}
-
-/* Adókulcsok (Fiók → Adózás). */
-function taxCfg() {
-  const t = state.tax || {};
-  return {
-    szja:   isFinite(+t.szja)   ? +t.szja   : 15,
-    szocho: isFinite(+t.szocho) ? +t.szocho : 13,
-    usFee:  isFinite(+t.usFee)  ? +t.usFee  : 15,
-  };
-}
-/* Osztalék nettó szorzója: 1 − (SZJA + SZOCHO + USA díj)/100 */
-function dividendNetFactor() {
-  const t = taxCfg();
-  return Math.max(0, 1 - (t.szja + t.szocho + t.usFee) / 100);
 }
 
 /* Éves készpénz-osztalék összesen (HUF) — csak a kifizető részvények. */
@@ -1980,17 +1940,6 @@ function nextChargeDate(day) {
   return d;
 }
 
-function setServiceAmount(id, val) {
-  const s = state.services.find(x => x.id === id);
-  if (!s) return;
-  const amount = parseInt(String(val).replace(/\D/g,'')) || 0;
-  if (!amount || amount === s.amount) { renderServices(); return; }
-  s.amount = amount;
-  save();
-  renderServices();
-  renderDashboard();
-}
-
 function renderServices() {
   const tbody = document.getElementById('services-tbody');
   if (!tbody) return;
@@ -2011,16 +1960,14 @@ function renderServices() {
       : `<span class="badge" style="background:rgba(107,114,128,0.15);color:var(--muted);cursor:pointer" title="Kattints az aktiváláshoz" onclick="toggleService('${s.id}')">⏸ Szünetel</span>`;
     return `<tr style="${s.active?'':'opacity:0.5'}">
       <td><strong>${s.name}</strong><br><span style="font-size:10px;color:var(--muted)">${Array.isArray(s.cat) ? (s.cat.join(', ') || '—') : (s.cat || '—')}</span></td>
-      <td><input type="text" inputmode="numeric" value="${Math.round(s.amount).toLocaleString('hu-HU')}"
-            onblur="setServiceAmount('${s.id}', this.value)"
-            oninput="this.value=this.value.replace(/[^0-9 ]/g,'')"
-            style="width:110px;font-size:12px;padding:5px 8px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2)"> Ft</td>
+      <td>${fmt(s.amount)}</td>
       <td>${CYCLE_LABEL[s.cycle]||s.cycle}</td>
       <td>${s.day ? s.day + '.' : '—'}</td>
       <td class="red">${fmt(monthly)}</td>
       <td>${statusBadge}</td>
       <td>
         <div class="row-actions">
+          <button class="btn btn-secondary btn-sm" onclick="openPriceModal('${s.id}')" title="Ár módosítása">✎ Ár</button>
           <button class="btn btn-danger btn-sm" onclick="deleteService('${s.id}')">×</button>
         </div>
       </td>
@@ -2046,77 +1993,27 @@ function renderServices() {
   }
 }
 
-function serviceTrendBadge(s) {
-  const hist = s.priceHistory || [];
-  if (hist.length < 2) return '';
-  const sorted = [...hist].sort((a,b) => a.date.localeCompare(b.date));
-  const prev = sorted[sorted.length-2].amount;
-  const cur = sorted[sorted.length-1].amount;
-  const diff = cur - prev;
-  if (!diff) return '';
-  const pct = prev ? (diff/prev*100) : 0;
-  const up = diff > 0;
-  const color = up ? 'var(--red)' : 'var(--accent)';
-  return `<div style="font-size:9.5px;color:${color};font-weight:600;margin-top:3px;white-space:nowrap">${up?'▲':'▼'} ${up?'+':''}${fmt(diff)} (${up?'+':''}${pct.toFixed(1)}%)</div>`;
-}
-
-let priceModalServiceId = null;
+let priceEditId = null;
 
 function openPriceModal(id) {
   const s = state.services.find(x => x.id === id);
   if (!s) return;
-  priceModalServiceId = id;
-  if (!s.priceHistory || !s.priceHistory.length) {
-    s.priceHistory = [{ date: now(), amount: s.amount }];
-    save();
-  }
-  document.getElementById('price-modal-title').textContent = `Díjtörténet – ${s.name}`;
-  document.getElementById('pc-amount').value = '';
-  document.getElementById('pc-date').value = now();
-  renderPriceHistoryList(s);
+  priceEditId = id;
+  document.getElementById('pc-service-name').innerHTML =
+    `<strong style="color:var(--text)">${escHtml(s.name)}</strong> jelenlegi díja: ${fmt(s.amount)}`;
+  document.getElementById('pc-amount').value = Math.round(s.amount).toLocaleString('hu-HU');
   openModal('price-modal');
 }
 
-function renderPriceHistoryList(s) {
-  const box = document.getElementById('price-history-list');
-  if (!box) return;
-  const hist = [...(s.priceHistory||[])].sort((a,b) => a.date.localeCompare(b.date));
-  box.innerHTML = `
-    <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:8px">Díjtörténet</div>
-    <div style="max-height:220px;overflow-y:auto">
-    ${hist.map((h,i) => {
-      const prev = hist[i-1];
-      let deltaHtml = '';
-      if (prev) {
-        const diff = h.amount - prev.amount;
-        if (diff !== 0) {
-          const up = diff > 0;
-          const pct = prev.amount ? (diff/prev.amount*100) : 0;
-          deltaHtml = `<span style="color:${up?'var(--red)':'var(--accent)'};font-weight:600;font-size:11px;margin-left:8px">${up?'▲':'▼'} ${up?'+':''}${fmt(diff)} (${up?'+':''}${pct.toFixed(1)}%)</span>`;
-        }
-      }
-      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--surface3);font-size:12.5px">
-        <span style="color:var(--muted)">${h.date}</span>
-        <span><strong>${fmt(h.amount)}</strong>${deltaHtml}</span>
-      </div>`;
-    }).join('') || '<div style="color:var(--muted);font-size:12px">Nincs rögzített díjtörténet</div>'}
-    </div>
-  `;
-}
-
-function addPriceChange() {
-  const s = state.services.find(x => x.id === priceModalServiceId);
+function savePrice() {
+  const s = state.services.find(x => x.id === priceEditId);
   if (!s) return;
   const amount = parseAmount('pc-amount');
-  const date = document.getElementById('pc-date').value || now();
-  if (!amount) return;
-  if (!s.priceHistory || !s.priceHistory.length) s.priceHistory = [{ date, amount: s.amount }];
-  s.priceHistory.push({ date, amount });
-  s.priceHistory.sort((a,b) => a.date.localeCompare(b.date));
-  s.amount = s.priceHistory[s.priceHistory.length-1].amount;
+  if (!amount) { closeModal('price-modal'); return; }
+  s.amount = amount;
   save();
-  document.getElementById('pc-amount').value = '';
-  renderPriceHistoryList(s);
+  closeModal('price-modal');
+  priceEditId = null;
   renderServices();
   renderDashboard();
 }
@@ -2286,8 +2183,8 @@ function renderDashboard() {
     drEl.textContent = '—';
     drEl.className = 'stat-value yellow';
   }
-  // A százalék alatt a hónapra vetített NETTÓ osztalék (adózás után, HUF)
-  drSub.textContent = `${fmt(monthlyDiv * dividendNetFactor())}/hó nettó osztalék`;
+  // A százalék alatt a hónapra vetített osztalék (HUF)
+  drSub.textContent = `${fmt(monthlyDiv)}/hó osztalék`;
   dm.innerHTML = `
     <div class="stat-value yellow" style="font-size:24px">${fmt(totalMonthly)}</div>
     <div class="stat-sub" style="margin-bottom:12px">Havi törlesztő + fix kiadások</div>
@@ -2513,7 +2410,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
 /* Ezt a firebase-init.js hívja meg, miután a state betöltődött a Firestore-ból. */
 function afterDataLoaded() {
-  populateTaxFields();
   if (state.stocks.length || state.crypto.length || state.goldItems.length) {
     refreshAllPrices();
   } else {
