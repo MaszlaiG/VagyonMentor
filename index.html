@@ -63,7 +63,6 @@
         <div class="stat-value cyan" id="d-current-value">0 Ft</div>
         <span id="d-invested-pct" style="font-size:13px;font-weight:600"></span>
       </div>
-      <div class="stat-sub" id="d-invested-line">Befektetve: 0 Ft</div>
     </div>
     <div class="card card-stat-yellow">
       <div class="card-title">Osztalék Ráta</div>
@@ -81,7 +80,7 @@
       </div>
     </div>
     <div class="card">
-      <div class="card-title">Közelgő Fontos Dátumok</div>
+      <div class="card-title">Közelgő Kiadások</div>
       <div id="quick-status" class="scroll-y-fade" style="max-height:260px;overflow-y:auto"></div>
     </div>
     <div class="card" style="border-color:rgba(245,158,11,0.4);box-shadow:0 0 0 1px rgba(245,158,11,0.15)">
@@ -136,6 +135,7 @@
         <div class="card card-stat-yellow">
           <div class="card-title">Éves osztalék</div>
           <div class="stat-value yellow" id="st-sum-div">0 Ft</div>
+          <div class="stat-sub" id="st-sum-div-net"></div>
         </div>
       </div>
 
@@ -159,8 +159,12 @@
         </div>
         <div class="form-grid fg2" style="margin-bottom:12px">
           <div>
-            <label>Ticker / Név</label>
+            <label>Ticker</label>
             <input type="text" id="st-ticker" placeholder="pl. AAPL">
+          </div>
+          <div>
+            <label>Teljes név (opcionális)</label>
+            <input type="text" id="st-name" placeholder="pl. Apple Inc.">
           </div>
           <div>
             <label>Deviza</label>
@@ -183,6 +187,29 @@
             <input type="number" id="st-div" placeholder="0" step="0.01">
           </div>
           <div>
+            <label>Osztalék típusa</label>
+            <select id="st-divtype">
+              <option value="cash">Kifizető (készpénzes)</option>
+              <option value="acc">Visszaforgató (újrabefektető)</option>
+            </select>
+          </div>
+          <div>
+            <label>Osztalék gyakorisága</label>
+            <select id="st-divfreq" onchange="updateStockDivMonths()">
+              <option value="yearly">Évente</option>
+              <option value="quarterly">Negyedévente</option>
+              <option value="monthly">Havonta</option>
+            </select>
+          </div>
+          <div id="st-divmonths-wrap" style="display:none">
+            <label>Mely 4 hónapban fizet</label>
+            <select id="st-divmonths">
+              <option value="1">Jan · Ápr · Júl · Okt</option>
+              <option value="2">Feb · Máj · Aug · Nov</option>
+              <option value="3">Már · Jún · Szep · Dec</option>
+            </select>
+          </div>
+          <div>
             <label>Vétel dátuma</label>
             <input type="date" id="st-date">
           </div>
@@ -198,7 +225,7 @@
 
 <div class="tab-content" id="tab-crypto">
   <div class="section-header">
-    <div class="section-title">Kripto Kereskedés — P&amp;L</div>
+    <div class="section-title">Kriptovaluta Kereskedés</div>
     <button class="btn" onclick="openModal('crypto-modal')">+ Vétel rögzítése</button>
   </div>
 
@@ -226,15 +253,21 @@
       </div>
 
       <div class="card">
-        <div class="card-title">Kereskedési napló</div>
+        <div class="card-title">Portfólió</div>
         <div class="scroll-table">
           <table>
-            <thead><tr><th>Dátum</th><th>Coin</th><th>Típus</th><th>Mennyiség</th><th>Ár</th><th>Érték</th><th>Díj</th><th>P&amp;L</th><th></th></tr></thead>
-            <tbody id="crypto-tbody"></tbody>
+            <thead><tr><th>Coin</th><th>Nyitott db</th><th>Átlag vételár</th><th>Jelenlegi ár</th><th>Befektetett</th><th>Jelenlegi érték</th><th>P&amp;L</th><th>Realizált P&amp;L</th><th></th></tr></thead>
+            <tbody id="crypto-holdings-tbody"></tbody>
           </table>
         </div>
         <div class="divider"></div>
-        <div id="crypto-coin-summary" style="display:flex;gap:16px;flex-wrap:wrap"></div>
+        <div class="card-title" style="margin-bottom:12px">Tranzakciók</div>
+        <div class="scroll-table">
+          <table>
+            <thead><tr><th>Dátum</th><th>Coin</th><th>Típus</th><th>Mennyiség</th><th>Ár</th><th>Érték</th><th>Díj</th><th></th></tr></thead>
+            <tbody id="crypto-tbody"></tbody>
+          </table>
+        </div>
       </div>
     </div>
 
@@ -248,6 +281,10 @@
           <div>
             <label>Coin</label>
             <input type="text" id="cr-coin" placeholder="BTC, ETH, ...">
+          </div>
+          <div>
+            <label>Teljes név (opcionális)</label>
+            <input type="text" id="cr-name" placeholder="pl. Bitcoin">
           </div>
           <div>
             <label>Deviza</label>
@@ -554,8 +591,8 @@
 
 <div class="tab-content" id="tab-services">
   <div class="section-header">
-    <div class="section-title">Rendszeres Szolgáltatások / Előfizetések</div>
-    <button class="btn" onclick="openModal('service-modal')">+ Előfizetés rögzítése</button>
+    <div class="section-title">Rendszeres Szolgáltatások</div>
+    <button class="btn" onclick="openModal('service-modal')">+ Szolgáltatás rögzítése</button>
   </div>
 
   <div class="grid g4" style="margin-bottom:16px">
@@ -583,7 +620,7 @@
         <div class="card-title">Előfizetések</div>
         <div class="scroll-table">
           <table>
-            <thead><tr><th>Szolgáltatás</th><th>Számla</th><th>Díj</th><th>Ciklus</th><th>Terhelés napja</th><th>Havi vetített</th><th>Státusz</th><th></th></tr></thead>
+            <thead><tr><th>Szolgáltatás</th><th>Díj</th><th>Ciklus</th><th>Terhelés napja</th><th>Havi vetített</th><th>Státusz</th><th></th></tr></thead>
             <tbody id="services-tbody"></tbody>
           </table>
         </div>
@@ -593,7 +630,7 @@
     <div class="modal" id="service-modal" onclick="if(event.target===this)closeModal('service-modal')">
       <div class="modal-card">
         <div class="modal-head">
-          <div class="section-title" style="font-size:18px">Előfizetés hozzáadása</div>
+          <div class="section-title" style="font-size:18px">Szolgáltatás rögzítése</div>
           <button class="btn btn-secondary btn-sm" onclick="closeModal('service-modal')">✕</button>
         </div>
         <div class="form-grid fg2" style="margin-bottom:12px">
@@ -626,23 +663,15 @@
           <div>
             <label>Számlázási ciklus</label>
             <select id="sv-cycle">
-              <option value="monthly">Havi</option>
+              <option value="weekly">Heti</option>
+              <option value="monthly" selected>Havi</option>
               <option value="quarterly">Negyedéves</option>
               <option value="yearly">Éves</option>
-              <option value="weekly">Heti</option>
             </select>
           </div>
           <div>
             <label>Terhelés napja (hónapban)</label>
             <input type="number" id="sv-day" placeholder="pl. 5" min="1" max="31">
-          </div>
-          <div>
-            <label>Melyik számláról</label>
-            <select id="sv-account">
-              <option value="Revolut">Revolut</option>
-              <option value="Főszámla">Főszámla (lakossági)</option>
-              <option value="Egyéb">Egyéb</option>
-            </select>
           </div>
         </div>
         <button class="btn" onclick="addService()" style="width:100%">+ Hozzáadás</button>
@@ -695,26 +724,52 @@
 </div>
 
 <div class="tab-content" id="tab-account">
-  <div style="max-width:560px;margin:0 auto">
+  <div style="max-width:1000px;margin:0 auto">
 
     <div class="section-title" style="font-size:22px;margin-bottom:4px">Fiók</div>
-    <div style="color:var(--muted);font-size:12px;margin-bottom:28px">Profiladatok, biztonság és adatkezelés</div>
+    <div style="color:var(--muted);font-size:12px;margin-bottom:24px">Profiladatok, biztonság, adózás és adatkezelés</div>
 
-    <!-- PROFIL -->
-    <div class="card" style="margin-bottom:16px">
-      <div class="card-title">Profiladatok</div>
-      <div class="form-grid" style="margin-bottom:16px">
-        <div>
-          <label>Megjelenített név</label>
-          <input type="text" id="acc-name" placeholder="pl. Maszlaigábor" autocomplete="name">
+    <div class="grid g2" style="margin-bottom:16px">
+      <!-- PROFIL -->
+      <div class="card">
+        <div class="card-title">Profiladatok</div>
+        <div class="form-grid" style="margin-bottom:16px">
+          <div>
+            <label>Megjelenített név</label>
+            <input type="text" id="acc-name" placeholder="pl. Maszlaigábor" autocomplete="name">
+          </div>
+          <div>
+            <label>E-mail cím</label>
+            <input type="email" id="acc-email" placeholder="pl. gabor@example.com" autocomplete="email">
+          </div>
         </div>
-        <div>
-          <label>E-mail cím</label>
-          <input type="email" id="acc-email" placeholder="pl. gabor@example.com" autocomplete="email">
-        </div>
+        <div id="acc-profile-msg" style="min-height:18px;font-size:12px;margin-bottom:12px"></div>
+        <button class="btn" onclick="updateProfile()">Adatok mentése</button>
       </div>
-      <div id="acc-profile-msg" style="min-height:18px;font-size:12px;margin-bottom:12px"></div>
-      <button class="btn" onclick="updateProfile()">Adatok mentése</button>
+
+      <!-- ADÓZÁS -->
+      <div class="card">
+        <div class="card-title">Adózás</div>
+        <p style="color:var(--muted);font-size:11px;margin-bottom:14px;line-height:1.5">
+          Az osztalék utáni, illetve az eszközök (részvény, kripto, arany) eladásából származó nyereség adókulcsai. A részvényeknél az éves osztalék nettó (adózás utáni) értéke ezekből számolódik.
+        </p>
+        <div class="form-grid fg3" style="margin-bottom:16px">
+          <div>
+            <label>SZJA (%)</label>
+            <input type="number" id="acc-szja" step="0.1" placeholder="15">
+          </div>
+          <div>
+            <label>SZOCHO (%)</label>
+            <input type="number" id="acc-szocho" step="0.1" placeholder="13">
+          </div>
+          <div>
+            <label>USA osztalékdíj (%)</label>
+            <input type="number" id="acc-usfee" step="0.1" placeholder="15">
+          </div>
+        </div>
+        <div id="acc-tax-msg" style="min-height:18px;font-size:12px;margin-bottom:12px"></div>
+        <button class="btn" onclick="saveTaxSettings()">Adókulcsok mentése</button>
+      </div>
     </div>
 
     <!-- JELSZÓ -->
@@ -738,37 +793,39 @@
       <button class="btn" onclick="updatePassword()">Jelszó módosítása</button>
     </div>
 
-    <!-- ADATKEZELÉS -->
-    <div class="card" style="margin-bottom:16px">
-      <div class="card-title">Adatok</div>
-      <div style="display:flex;flex-direction:column;gap:10px">
-        <button class="btn" onclick="exportData()">⬇ Adatok letöltése (JSON biztonsági mentés)</button>
-        <label class="btn btn-secondary" style="display:block;text-align:center;cursor:pointer">
-          ⬆ Adatok visszatöltése fájlból
-          <input type="file" accept=".json,application/json" style="display:none" onchange="importData(this)">
-        </label>
+    <div class="grid g2" style="margin-bottom:16px">
+      <!-- ADATKEZELÉS -->
+      <div class="card">
+        <div class="card-title">Adatok</div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <button class="btn" onclick="exportData()">⬇ Adatok letöltése (JSON biztonsági mentés)</button>
+          <label class="btn btn-secondary" style="display:block;text-align:center;cursor:pointer">
+            ⬆ Adatok visszatöltése fájlból
+            <input type="file" accept=".json,application/json" style="display:none" onchange="importData(this)">
+          </label>
+        </div>
+        <p style="color:var(--muted);font-size:11px;margin-top:12px;line-height:1.5">
+          Az adataid a felhőben (Firebase) tárolódnak a fiókodhoz kötve — bármely eszközről elérhetők. A biztonsági mentés fájlba a te saját másolatod.
+        </p>
       </div>
-      <p style="color:var(--muted);font-size:11px;margin-top:12px;line-height:1.5">
-        Az adataid a felhőben (Firebase) tárolódnak a fiókodhoz kötve — bármely eszközről elérhetők. A biztonsági mentés fájlba a te saját másolatod.
-      </p>
-    </div>
 
-    <!-- FIÓKVÁLTÁS / KIJELENTKEZÉS -->
-    <div class="card" style="margin-bottom:16px">
-      <div class="card-title">Fiók</div>
-      <div style="display:flex;flex-direction:column;gap:10px">
-        <button class="btn btn-secondary" onclick="logout()">
-          <span style="display:flex;align-items:center;gap:8px;justify-content:center">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-            Kijelentkezés
-          </span>
-        </button>
-        <button class="btn btn-secondary" onclick="switchAccount()">
-          <span style="display:flex;align-items:center;gap:8px;justify-content:center">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-            Fiókváltás (kijelentkezés + bejelentkezés)
-          </span>
-        </button>
+      <!-- FIÓKVÁLTÁS / KIJELENTKEZÉS -->
+      <div class="card">
+        <div class="card-title">Fiók</div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <button class="btn btn-secondary" onclick="logout()">
+            <span style="display:flex;align-items:center;gap:8px;justify-content:center">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+              Kijelentkezés
+            </span>
+          </button>
+          <button class="btn btn-secondary" onclick="switchAccount()">
+            <span style="display:flex;align-items:center;gap:8px;justify-content:center">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              Fiókváltás
+            </span>
+          </button>
+        </div>
       </div>
     </div>
 

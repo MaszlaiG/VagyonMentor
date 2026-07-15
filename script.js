@@ -220,6 +220,7 @@ let state = {
   bizExpense: [],
   orders: [],
   bizTaxRate: 15,
+  tax: { szja: 15, szocho: 13, usFee: 15 },
   paidInstallments: {}
 };
 
@@ -253,6 +254,7 @@ function normalizeState() {
   if (!state.loans) state.loans = [];
   if (!state.goldSpot) state.goldSpot = (state.gold && state.gold.pricePerGram) || 28000;
   if (!state.services) state.services = [];
+  if (!state.tax) state.tax = { szja: 15, szocho: 13, usFee: 15 };
   if (state.usdHuf) usdHuf = state.usdHuf;
   if (state.eurHuf) eurHuf = state.eurHuf;
   if (state.fxUpdatedAt) fxUpdatedAt = state.fxUpdatedAt;
@@ -348,6 +350,29 @@ function resetAllData() {
   db.collection('vaults').doc(currentUid).set(reset, { merge: true })
     .catch(e => console.error('[VagyonMentor] reset error:', e))
     .finally(() => location.reload());
+}
+
+/* ---- Adózás beállítások (Fiók → Adózás) ---- */
+function populateTaxFields() {
+  const t = state.tax || {};
+  const set = (id, val) => { const el = document.getElementById(id); if (el && document.activeElement !== el) el.value = (val ?? ''); };
+  set('acc-szja',   t.szja   ?? 15);
+  set('acc-szocho', t.szocho ?? 13);
+  set('acc-usfee',  t.usFee  ?? 15);
+}
+
+function saveTaxSettings() {
+  const num = (id, def) => { const v = parseFloat(document.getElementById(id).value); return isFinite(v) ? v : def; };
+  state.tax = {
+    szja:   num('acc-szja', 15),
+    szocho: num('acc-szocho', 13),
+    usFee:  num('acc-usfee', 15),
+  };
+  save();
+  const msg = document.getElementById('acc-tax-msg');
+  if (msg) { msg.style.color = 'var(--accent)'; msg.textContent = '✓ Adókulcsok elmentve.'; setTimeout(() => { msg.textContent = ''; }, 2500); }
+  renderStocks();
+  renderDashboard();
 }
 
 const fmt = n => {
@@ -688,18 +713,22 @@ async function fxRateForDate(currency, dateStr) {
 
 async function addStock() {
   const ticker = document.getElementById('st-ticker').value.trim().toUpperCase();
+  const name = (document.getElementById('st-name').value || '').trim();
   const qty = parseFloat(document.getElementById('st-qty').value)||0;
   const currency = document.getElementById('st-currency').value;
   const avgNative = parseFloat(document.getElementById('st-avg').value)||0;
   const divYield = parseFloat(document.getElementById('st-div').value)||0;
+  const divType = document.getElementById('st-divtype').value;
+  const divFreq = document.getElementById('st-divfreq').value;
+  const divMonths = document.getElementById('st-divmonths').value;
   const buyDate = document.getElementById('st-date').value || now();
   if (!ticker || !qty) return;
   const fxRate = await fxRateForDate(currency, buyDate);
   const avg = avgNative * fxRate;
   const price = avg; // kezdő érték; az élő frissítés felülírja
-  state.stocks.push({ id:uid(), ticker, qty, avg, avgNative, price, divYield, currency, buyDate });
+  state.stocks.push({ id:uid(), ticker, name, qty, avg, avgNative, price, divYield, divType, divFreq, divMonths, currency, buyDate });
   save();
-  ['st-ticker','st-qty','st-avg','st-div'].forEach(id=>document.getElementById(id).value='');
+  ['st-ticker','st-name','st-qty','st-avg','st-div'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('st-date').value = now();
   closeModal('stock-modal');
   renderAll();
@@ -716,6 +745,55 @@ function deleteStock(id) {
 function stockDivYield(s, currentPrice) {
   if (s.divYield != null) return s.divYield;
   return (s.div && currentPrice) ? (s.div / currentPrice * 100) : 0;
+}
+
+/* Régi (típus nélküli) tételeket kifizetőnek tekintjük. A visszaforgató
+   (acc) részvény nem fizet készpénz-osztalékot, így nem adóztatjuk. */
+function stockIsCash(s) { return (s.divType || 'cash') !== 'acc'; }
+
+const DIV_MONTHS_SET = { '1': [1,4,7,10], '2': [2,5,8,11], '3': [3,6,9,12] };
+const MONTH_ABBR = ['', 'Jan','Feb','Már','Ápr','Máj','Jún','Júl','Aug','Szep','Okt','Nov','Dec'];
+
+function stockDivFreqLabel(s) {
+  if (!stockIsCash(s)) return 'Visszaforgató';
+  const f = s.divFreq || 'yearly';
+  if (f === 'monthly') return 'Havonta';
+  if (f === 'quarterly') {
+    const set = DIV_MONTHS_SET[s.divMonths || '3'] || DIV_MONTHS_SET['3'];
+    return 'Negyedévente (' + set.map(m => MONTH_ABBR[m]).join(', ') + ')';
+  }
+  return 'Évente';
+}
+
+/* Adókulcsok (Fiók → Adózás). */
+function taxCfg() {
+  const t = state.tax || {};
+  return {
+    szja:   isFinite(+t.szja)   ? +t.szja   : 15,
+    szocho: isFinite(+t.szocho) ? +t.szocho : 13,
+    usFee:  isFinite(+t.usFee)  ? +t.usFee  : 15,
+  };
+}
+/* Osztalék nettó szorzója: 1 − (SZJA + SZOCHO + USA díj)/100 */
+function dividendNetFactor() {
+  const t = taxCfg();
+  return Math.max(0, 1 - (t.szja + t.szocho + t.usFee) / 100);
+}
+
+/* Éves készpénz-osztalék összesen (HUF) — csak a kifizető részvények. */
+function annualStockDividendHuf() {
+  return state.stocks.reduce((a, s) => {
+    if (!stockIsCash(s)) return a;
+    const cp = getLivePrice(s.ticker) || s.price;
+    return a + s.qty * cp * (stockDivYield(s, cp) / 100);
+  }, 0);
+}
+
+/* Osztalék-hónapok választó megjelenítése csak negyedéves gyakoriságnál */
+function updateStockDivMonths() {
+  const freq = document.getElementById('st-divfreq');
+  const wrap = document.getElementById('st-divmonths-wrap');
+  if (freq && wrap) wrap.style.display = (freq.value === 'quarterly') ? '' : 'none';
 }
 
 function renderStocks() {
@@ -749,7 +827,7 @@ function renderStocks() {
     const divYield = stockDivYield(s, currentPriceHuf);
     totalInvested += investedHuf;
     totalCurrent += currentHuf;
-    totalDiv += currentHuf * divYield / 100;
+    totalDiv += stockIsCash(s) ? currentHuf * divYield / 100 : 0;
 
     // Natív értékek a sorhoz
     const avgN = (s.avgNative != null) ? s.avgNative : (rate ? s.avg / rate : s.avg);
@@ -758,7 +836,7 @@ function renderStocks() {
     const currentN = s.qty * curPriceN;
     const plN = currentN - investedN;
     const plPct = investedN ? (plN/investedN*100) : 0;
-    const annualDivN = currentN * divYield / 100;
+    const annualDivN = stockIsCash(s) ? currentN * divYield / 100 : 0;
 
     const updatedAt = getLiveUpdatedAt(s.ticker);
     const liveBadge = livePrice
@@ -766,7 +844,11 @@ function renderStocks() {
       : `<span class="badge badge-yellow" title="Manuális ár">manuális</span>`;
     return `
       <tr>
-        <td><strong>${s.ticker}</strong> <span class="badge badge-cyan">${cur}</span></td>
+        <td>
+          <strong>${s.ticker}</strong>
+          ${s.name ? `<div style="font-size:10px;color:var(--muted)">${escHtml(s.name)}</div>` : ''}
+          <div style="margin-top:3px"><span class="badge ${stockIsCash(s)?'badge-green':'badge-purple'}" style="font-size:9px" title="${stockDivFreqLabel(s)}">${stockIsCash(s)?'kifizető':'visszaforgató'}</span></div>
+        </td>
         <td style="color:var(--muted)">${s.buyDate||'—'}</td>
         <td>${fmtNum(s.qty)}</td>
         <td>${fmtCur(avgN, cur)}</td>
@@ -789,10 +871,18 @@ function renderStocks() {
   plEl.className = 'stat-value ' + (totalPL>=0?'green':'red');
   document.getElementById('st-sum-pl-card').className = 'card ' + (totalPL>=0?'card-stat-green':'card-stat-red');
   document.getElementById('st-sum-div').textContent = fmt(totalDiv);
+  const netEl = document.getElementById('st-sum-div-net');
+  if (netEl) {
+    const t = taxCfg();
+    netEl.textContent = totalDiv > 0
+      ? `Nettó (adózás után): ${fmt(totalDiv * dividendNetFactor())} · SZJA ${t.szja}% + SZOCHO ${t.szocho}% + USA ${t.usFee}%`
+      : '';
+  }
 }
 
 async function addCryptoTrade() {
   const coin = document.getElementById('cr-coin').value.trim().toUpperCase();
+  const name = (document.getElementById('cr-name').value || '').trim();
   const type = 'buy';
   const currency = document.getElementById('cr-currency').value;
   const qty = parseFloat(document.getElementById('cr-qty').value)||0;
@@ -803,9 +893,9 @@ async function addCryptoTrade() {
   const fxRate = await fxRateForDate(currency, date);
   const price = priceNative * fxRate;
   const fee = feeNative * fxRate;
-  state.crypto.push({ id:uid(), coin, type, qty, price, date, fee, currency });
+  state.crypto.push({ id:uid(), coin, name, type, qty, price, date, fee, currency });
   save();
-  ['cr-coin','cr-qty','cr-price','cr-fee'].forEach(id=>document.getElementById(id).value='');
+  ['cr-coin','cr-name','cr-qty','cr-price','cr-fee'].forEach(id=>document.getElementById(id).value='');
   closeModal('crypto-modal');
   renderAll();
 }
@@ -941,48 +1031,52 @@ function renderCrypto() {
     `;
   }
 
+  // Coin → teljes név térkép a rögzített ügyletekből
+  const nameMap = {};
+  state.crypto.forEach(t => { if (t.name) nameMap[t.coin] = t.name; });
+
+  // PORTFÓLIÓ — coinonként aggregált pozíció (a részvények mintájára)
+  const holdingsBody = document.getElementById('crypto-holdings-tbody');
+  if (holdingsBody) {
+    holdingsBody.innerHTML = Object.entries(coins).map(([coin, c]) => {
+      const openQty = c.buys.reduce((a,b)=>a+b.qty,0);
+      const openCost = c.buys.reduce((a,b)=>a+b.qty*b.price,0);
+      const live = getLivePrice(coin);
+      const avg = openQty ? openCost/openQty : 0;
+      const curVal = live ? openQty*live : openCost;
+      const pl = curVal - openCost;
+      const plPct = openCost ? pl/openCost*100 : 0;
+      const liveBadge = live
+        ? `<span class="badge badge-green" title="Frissítve: ${getLiveUpdatedAt(coin)}">● élő</span>`
+        : `<span class="badge badge-yellow">manuális</span>`;
+      return `<tr>
+        <td><strong>${coin}</strong>${nameMap[coin]?`<div style="font-size:10px;color:var(--muted)">${escHtml(nameMap[coin])}</div>`:''}</td>
+        <td>${openQty>0?fmtNum(openQty):'—'}</td>
+        <td>${openQty>0?fmt(avg):'—'}</td>
+        <td>${openQty>0?fmt(live||avg)+' '+liveBadge:'—'}</td>
+        <td>${openQty>0?fmt(openCost):'—'}</td>
+        <td class="cyan">${openQty>0?fmt(curVal):'—'}</td>
+        <td class="${pl>=0?'green':'red'}">${openQty>0?`${pl>=0?'+':''}${fmt(pl)} <span style="font-size:10px">(${plPct.toFixed(1)}%)</span>`:'—'}</td>
+        <td class="${c.realized>=0?'green':'red'}">${c.realized?`${c.realized>=0?'+':''}${fmt(c.realized)}`:'—'}</td>
+        <td>${openQty>0?`<button class="btn btn-sm" onclick="openSellModal('${coin}')">Eladás</button>`:''}</td>
+      </tr>`;
+    }).join('') || '<tr><td colspan="9" style="color:var(--muted);text-align:center;padding:20px">Nincs kriptó pozíció</td></tr>';
+  }
+
+  // TRANZAKCIÓK — nyers ügyletnapló (javításhoz/törléshez)
   const tbody = document.getElementById('crypto-tbody');
-  tbody.innerHTML = state.crypto.map(t => `
+  tbody.innerHTML = [...state.crypto].sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(t => `
     <tr>
       <td>${t.date}</td>
-      <td><strong>${t.coin}</strong> <span class="badge badge-cyan">${t.currency||'HUF'}</span></td>
+      <td><strong>${t.coin}</strong></td>
       <td><span class="badge ${t.type==='buy'?'badge-green':'badge-yellow'}">${t.type==='buy'?'Vétel':'Eladás'}</span></td>
       <td>${fmtNum(t.qty)}</td>
       <td>${fmt(t.price)}</td>
       <td>${fmt(t.qty*t.price)}</td>
       <td class="red">${t.fee?fmt(t.fee):'-'}</td>
-      <td>—</td>
       <td><button class="btn btn-danger btn-sm" onclick="deleteCryptoTrade('${t.id}')">×</button></td>
     </tr>
-  `).join('') || '<tr><td colspan="9" style="color:var(--muted);text-align:center;padding:20px">Nincs ügylet</td></tr>';
-
-  const sumEl = document.getElementById('crypto-coin-summary');
-  sumEl.innerHTML = Object.entries(coins).map(([coin,c]) => {
-    const openQty = c.buys.reduce((a,b)=>a+b.qty,0);
-    const openCost = c.buys.reduce((a,b)=>a+b.qty*b.price,0);
-    const livePrice = getLivePrice(coin);
-    const liveVal = livePrice ? openQty * livePrice : null;
-    const unrealized = liveVal !== null ? liveVal - openCost : null;
-    const updatedAt = getLiveUpdatedAt(coin);
-    return `<div class="card" style="min-width:180px;padding:12px">
-      <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
-        <span style="font-family:var(--display);font-weight:700">${coin}</span>
-        ${livePrice ? `<span class="badge badge-green" title="${updatedAt}">● élő</span>` : ''}
-      </div>
-      <div style="font-size:11px;color:var(--muted)">Realizált P&L</div>
-      <div class="${c.realized>=0?'green':'red'}" style="font-weight:600">${fmt(c.realized)}</div>
-      <div style="font-size:11px;color:var(--muted);margin-top:6px">Nyitott pozíció (bekerülési)</div>
-      <div>${fmt(openCost)}</div>
-      ${liveVal !== null ? `
-        <div style="font-size:11px;color:var(--muted);margin-top:6px">Aktuális eladási érték</div>
-        <div class="cyan" style="font-weight:600">${fmt(liveVal)}</div>
-        <div style="font-size:11px;color:var(--muted);margin-top:2px">Nem realizált P&L</div>
-        <div class="${unrealized>=0?'green':'red'}" style="font-weight:600">${unrealized>=0?'+':''}${fmt(unrealized)}</div>
-        <div style="font-size:10px;color:var(--muted);margin-top:4px">Frissítve: ${updatedAt}</div>
-      ` : `<div style="font-size:11px;color:var(--muted);margin-top:6px">Nyomj frissítést az élő árért</div>`}
-      ${openQty > 0 ? `<button class="btn btn-sm" style="width:100%;margin-top:10px" onclick="openSellModal('${coin}')">Eladás</button>` : ''}
-    </div>`;
-  }).join('');
+  `).join('') || '<tr><td colspan="8" style="color:var(--muted);text-align:center;padding:20px">Nincs ügylet</td></tr>';
 }
 
 function calcLoanEndDate() {
@@ -1676,7 +1770,8 @@ function renderGold() {
   const tbody = document.getElementById('gold-tbody');
   if (!tbody) return;
 
-  const sortedGold = [...state.goldItems].sort((a,b) => (b.date||'').localeCompare(a.date||''));
+  const sortedGold = [...state.goldItems].sort((a,b) =>
+    (a.grams - b.grams) || (a.date||'').localeCompare(b.date||''));
 
   tbody.innerHTML = sortedGold.map(g => {
     const value = goldItemValue(g, spot);
@@ -1732,9 +1827,8 @@ function addService() {
   const amount  = parseAmount('sv-amount');
   const cycle   = document.getElementById('sv-cycle').value;
   const day     = parseInt(document.getElementById('sv-day').value)||0;
-  const account = document.getElementById('sv-account').value;
   if (!name || !amount) return;
-  state.services.push({ id:uid(), name, cat, amount, cycle, day, account, active:true, priceHistory: [{ date: now(), amount }] });
+  state.services.push({ id:uid(), name, cat, amount, cycle, day, active:true, priceHistory: [{ date: now(), amount }] });
   save();
   ['sv-name','sv-amount','sv-day'].forEach(id => document.getElementById(id).value = '');
   document.querySelectorAll('#sv-cat input:checked').forEach(i => i.checked = false);
@@ -1770,7 +1864,7 @@ function renderServices() {
   if (!tbody) return;
 
   let totalMonthly = 0, activeCount = 0;
-  let nextDate = null, nextName = '';
+  const charges = [];
 
   tbody.innerHTML = state.services.map(s => {
     const monthly = serviceMonthlyCost(s);
@@ -1778,14 +1872,13 @@ function renderServices() {
       totalMonthly += monthly;
       activeCount++;
       const nd = nextChargeDate(s.day);
-      if (nd && (!nextDate || nd < nextDate)) { nextDate = nd; nextName = s.name; }
+      if (nd) charges.push({ date: nd, name: s.name, amount: s.amount });
     }
     const statusBadge = s.active
       ? `<span class="badge badge-green" style="cursor:pointer" title="Kattints a szüneteltetéshez" onclick="toggleService('${s.id}')">● Aktív</span>`
       : `<span class="badge" style="background:rgba(107,114,128,0.15);color:var(--muted);cursor:pointer" title="Kattints az aktiváláshoz" onclick="toggleService('${s.id}')">⏸ Szünetel</span>`;
     return `<tr style="${s.active?'':'opacity:0.5'}">
       <td><strong>${s.name}</strong><br><span style="font-size:10px;color:var(--muted)">${Array.isArray(s.cat) ? (s.cat.join(', ') || '—') : (s.cat || '—')}</span></td>
-      <td><span class="badge badge-cyan">${s.account}</span></td>
       <td>${fmt(s.amount)}${serviceTrendBadge(s)}</td>
       <td>${CYCLE_LABEL[s.cycle]||s.cycle}</td>
       <td>${s.day ? s.day + '.' : '—'}</td>
@@ -1798,16 +1891,24 @@ function renderServices() {
         </div>
       </td>
     </tr>`;
-  }).join('') || '<tr><td colspan="8" style="color:var(--muted);text-align:center;padding:20px">Nincs rögzített előfizetés</td></tr>';
+  }).join('') || '<tr><td colspan="7" style="color:var(--muted);text-align:center;padding:20px">Nincs rögzített szolgáltatás</td></tr>';
 
   document.getElementById('sv-monthly').textContent = fmt(totalMonthly);
   document.getElementById('sv-yearly').textContent = fmt(totalMonthly * 12);
   document.getElementById('sv-count').textContent = activeCount + ' db';
   const nextEl = document.getElementById('sv-next');
   if (nextEl) {
-    nextEl.innerHTML = nextDate
-      ? `${nextDate.toLocaleDateString('hu-HU')}<br><span style="font-size:11px;color:var(--muted)">${nextName}</span>`
-      : '—';
+    if (!charges.length) {
+      nextEl.innerHTML = '—';
+    } else {
+      const minTime = Math.min(...charges.map(c => c.date.getTime()));
+      const due = charges.filter(c => c.date.getTime() === minTime);
+      const dateStr = new Date(minTime).toLocaleDateString('hu-HU');
+      const dayTotal = due.reduce((a,c) => a + c.amount, 0);
+      nextEl.innerHTML = `${dateStr}`
+        + `<div style="font-size:11px;color:var(--muted);font-weight:400;margin-top:3px;line-height:1.4">${due.map(c => escHtml(c.name)).join(', ')}</div>`
+        + (due.length > 1 ? `<div style="font-size:11px;color:var(--muted);font-weight:600;margin-top:2px">Aznap összesen: ${fmt(dayTotal)}</div>` : '');
+    }
   }
 }
 
@@ -1924,7 +2025,7 @@ function buildUpcomingDatesHTML() {
         const d = getPaymentDate(l, i);
         const dateStr = toLocalDateStr(d);
         const days = daysUntil(dateStr);
-        if (days <= 7) {
+        if (days <= 14) {
           items.push({
             kind: 'loan',
             kindLabel: 'hitel',
@@ -1946,12 +2047,12 @@ function buildUpcomingDatesHTML() {
     if (nd) {
       const dateStr = toLocalDateStr(nd);
       const days = daysUntil(dateStr);
-      if (days <= 7) {
+      if (days <= 14) {
         items.push({
           kind: 'service',
           kindLabel: 'szolgáltatás',
           badgeClass: 'badge-yellow',
-          label: `Esedékes fizetés – ${s.name}`,
+          label: s.name,
           date: dateStr,
           days,
           amount: s.amount,
@@ -1961,7 +2062,7 @@ function buildUpcomingDatesHTML() {
   });
 
   if (!items.length) {
-    return '<div style="color:var(--muted);text-align:center;padding:20px;font-size:12px">Nincs közelgő fontos esemény a következő napokban</div>';
+    return '<div style="color:var(--muted);text-align:center;padding:20px;font-size:12px">Nincs közelgő kiadás a következő napokban</div>';
   }
 
   items.sort((a,b) => a.days - b.days);
@@ -2005,10 +2106,7 @@ function renderDashboard() {
   },0);
   const totalLoan = state.loans.reduce((a,l) => a + calcRemaining(l), 0);
   const totalPledge = pledgeTotalDebt();
-  const annualDiv = state.stocks.reduce((a,s)=>{
-    const cp = getLivePrice(s.ticker) || s.price;
-    return a + s.qty*cp*(stockDivYield(s,cp)/100);
-  },0);
+  const annualDiv = annualStockDividendHuf();
   const currentValue = stockVal + goldVal + cryptoOpen;
 
   // Befektetett (bekerülési) költség: részvény + arany + kripto nyitott pozíció
@@ -2027,8 +2125,6 @@ function renderDashboard() {
     pctEl.textContent = '';
     pctEl.className = '';
   }
-  document.getElementById('d-invested-line').textContent = 'Befektetve: ' + fmt(investedCost);
-
   const netWorth = stockVal + goldVal + cryptoOpen - totalLoan - totalPledge;
   const nwEl = document.getElementById('d-networth');
   nwEl.textContent = fmt(netWorth);
@@ -2052,12 +2148,12 @@ function renderDashboard() {
   if (totalMonthly > 0) {
     drEl.textContent = divRate.toFixed(1) + '%';
     drEl.className = 'stat-value ' + (divRate >= 100 ? 'green' : (divRate >= 50 ? 'yellow' : 'red'));
-    drSub.textContent = `${fmt(monthlyDiv)}/hó osztalék · ${fmt(totalMonthly)} fix kiadásból`;
   } else {
     drEl.textContent = '—';
     drEl.className = 'stat-value yellow';
-    drSub.textContent = 'Nincs rögzített havi fix kiadás';
   }
+  // A százalék alatt csak a hónapra vetített osztalék (HUF)
+  drSub.textContent = `${fmt(monthlyDiv)}/hó osztalék`;
   dm.innerHTML = `
     <div class="stat-value yellow" style="font-size:24px">${fmt(totalMonthly)}</div>
     <div class="stat-sub" style="margin-bottom:12px">Havi törlesztő + fix kiadások</div>
@@ -2283,6 +2379,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 /* Ezt a firebase-init.js hívja meg, miután a state betöltődött a Firestore-ból. */
 function afterDataLoaded() {
+  populateTaxFields();
   if (state.stocks.length || state.crypto.length || state.goldItems.length) {
     refreshAllPrices();
   } else {
