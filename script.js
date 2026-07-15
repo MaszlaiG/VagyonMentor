@@ -2230,6 +2230,22 @@ function renderDashboard() {
   setTxt('d-total-liab', fmt(totalLiab));
   setTxt('d-total-liab-sub', `Hitel ${fmt(totalLoan)} · Zálog ${fmt(totalPledge)}`);
 
+  // Portfólió Ráta: a teljes tartozás (Hitel+Zálog) a befektetett eszközök jelenlegi értékének %-a
+  const portfolioRate = currentValue > 0 ? (totalLiab / currentValue * 100) : 0;
+  const prEl = document.getElementById('d-portfolio-rate');
+  if (prEl) {
+    if (currentValue > 0) {
+      prEl.textContent = portfolioRate.toFixed(1) + '%';
+      prEl.className = 'stat-value ' + (portfolioRate <= 50 ? 'green' : (portfolioRate <= 100 ? 'yellow' : 'red'));
+      setCls('d-portfolio-rate-card', 'card ' + (portfolioRate <= 50 ? 'card-stat-green' : (portfolioRate <= 100 ? 'card-stat-yellow' : 'card-stat-red')));
+    } else {
+      prEl.textContent = '—';
+      prEl.className = 'stat-value';
+      setCls('d-portfolio-rate-card', 'card card-stat-dark');
+    }
+  }
+  setTxt('d-portfolio-rate-sub', `${fmt(totalLiab)} tartozás / ${fmt(currentValue)} eszköz`);
+
   setTxt('d-unreal-pl', (unrealPL>=0?'+':'') + fmt(unrealPL));
   setCls('d-unreal-pl', 'stat-value ' + (unrealPL>=0?'green':'red'));
   setCls('d-unreal-card', 'card ' + (unrealPL>=0?'card-stat-green':'card-stat-red'));
@@ -2269,8 +2285,8 @@ function renderDashboard() {
     const netMonthly = monthlyDiv - totalMonthly;
     cf.innerHTML = `
       <div class="tax-row"><span style="color:var(--muted)">Bevétel — osztalék / hó</span><span class="green">${fmt(monthlyDiv)}</span></div>
-      <div class="tax-row"><span style="color:var(--muted)">Hiteltörlesztő / hó</span><span style="color:var(--primary-strong);font-weight:600">${fmt(monthlyLoan)}</span></div>
-      <div class="tax-row"><span style="color:var(--muted)">Szolgáltatások / hó</span><span style="color:var(--primary-strong);font-weight:600">${fmt(svcMonthly)}</span></div>
+      <div class="tax-row"><span style="color:var(--muted)">Hiteltörlesztő / hó</span><span style="color:var(--accent3);font-weight:600">${fmt(monthlyLoan)}</span></div>
+      <div class="tax-row"><span style="color:var(--muted)">Szolgáltatások / hó</span><span style="color:var(--accent3);font-weight:600">${fmt(svcMonthly)}</span></div>
       <div class="tax-row" style="border-top:2px solid var(--border2)"><span><strong>Nettó havi egyenleg</strong></span><span class="${netMonthly>=0?'green':'red'}"><strong>${netMonthly>=0?'+':''}${fmt(netMonthly)}</strong></span></div>
       <div style="font-size:11px;color:var(--muted);margin-top:10px">Osztalékfedezet a fix kiadásokra: <strong>${totalMonthly>0?divRate.toFixed(1)+'%':'—'}</strong></div>
     `;
