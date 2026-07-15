@@ -1,61 +1,68 @@
-VagyonMentor
+# VagyonMentor
 
-Személyes vagyonkövető webalkalmazás — egy helyen tartja számon a részvényeket, kriptovalutákat, aranyat, hiteleket, zálogokat és rendszeres szolgáltatásokat/előfizetéseket.
+> Egyszemélyes, felhőalapú **személyi vagyonkezelő** webalkalmazás — a teljes vagyonod egy helyen, élő árfolyamokkal.
 
-🔗 Élő verzió: https://maszlaig.github.io/VagyonMentor/
+Egy bejelentkezett felhasználó teljes portfólióját követi: befektetési arany, részvények, kriptovaluta, zálogtételek, hitelek és előfizetések. Az árfolyamokat élőben húzza le, automatikusan számol nyereséget/veszteséget (P&L), az adatok pedig a fiókodhoz kötve, a felhőben (Firebase) tárolódnak — bármely eszközről elérhetők. Nincs build lépés, keretrendszer nélküli tiszta HTML/CSS/JS.
 
-Funkciók
+---
 
+## Főbb funkciók
 
-Áttekintés / Dashboard — nettó vagyon, befektetett eszközök értéke, vagyonmegoszlás grafikonon
-Részvény — több devizanemben (HUF, USD, EUR) rögzített pozíciók, automatikus árfolyam-átváltás
-Kripto — vétel/eladás nyilvántartás, élő árfolyamadatokkal
-Arany — tételes nyilvántartás forma és tisztaság szerint, aktuális spot ár alapján
-Zálog — aranyfedezetű kölcsönök futamidő és kamat szerint
-Hitel — törlesztőrészletek, göngyölített állapot követése
-Szolgáltatások — rendszeres kiadások/előfizetések ciklus szerint
-Sötét mód — napszak alapján (19:00–06:00 között) automatikusan bekapcsol
-Reszponzív, mobilbarát felület
+Az alkalmazás füleken keresztül szervezi a vagyonelemeket:
 
+- **Áttekintés (dashboard)** — nettó vagyon, befektetett eszközök értéke, osztalékráta, vagyonmegoszlás (saját rajzolt donut diagram), havi kiadás és a **közelgő fontos dátumok** (hitel-, zálog- és előfizetés-lejáratok) egy helyen.
+- **Figyelő** — figyelőlista a követett eszközökhöz.
+- **Arany** — befektetési arany tömeg, bekerülési ár, aktuális érték és P&L tételenként; **élő aranyárfolyam** (HUF).
+- **Zálog** — kézhez kapott összeg, jelenlegi tartozás, lejáratkor visszafizetendő összeg, automatikus lejárat- és kamatszámítással.
+- **Részvény** — befektetett és aktuális érték, nyitott + realizált P&L, éves osztalék és **kereskedési napló**; élő részvényárfolyam és USD/HUF átváltás.
+- **Kripto** — trade-alapú nyilvántartás díjakkal és P&L-lel; **élő kriptoárak** (CoinGecko).
+- **Hitel** — fennálló tartozás, havi/éves törlesztő, hitelek száma, lejárat számítással.
+- **Szolgáltatások** — előfizetések havi/éves összköltsége, következő terhelés dátuma és **árváltozás-történet** szolgáltatásonként.
+- **Fiók** — profiladatok, jelszómódosítás, **adatok exportja/importja** (JSON biztonsági mentés) és veszélyzóna.
 
-Adattárolás
+## Élő árfolyamforrások
 
-Az adatok a Firebase Firestore-ban tárolódnak, e-mail/jelszó alapú bejelentkezéshez kötve — így bármelyik eszközről (telefon, gép) elérhetők ugyanazok az adatok. Minden felhasználó kizárólag a saját adatait éri el (Firestore security rules + Firebase Authentication).
+Az árakat több nyilvános forrásból, CORS-proxyn keresztül kéri le:
 
+| Eszköz | Forrás |
+| --- | --- |
+| Kripto | CoinGecko |
+| Részvény | Yahoo Finance |
+| Deviza (USD/HUF stb.) | Frankfurter |
+| Arany | arany spot API |
 
-A kódban szereplő Firebase apiKey nem titkos érték — ez minden kliens oldali Firebase-alkalmazásnál nyilvánosan látható, a tényleges hozzáférés-védelmet a Firestore szabályok és a bejelentkezés adja.
+## Technológia
 
+- **Vanilla HTML / CSS / JavaScript** — build lépés és keretrendszer nélkül.
+- **Firebase** — Authentication (e-mail/jelszó) és Cloud Firestore a felhős tároláshoz.
+- Egyedi **donut diagram** és formázók (nincs külső chart-könyvtár).
+- Idő szerinti **automatikus téma** (nappal/éjszaka).
+- **localStorage → Firebase migráció**: a régi, helyben tárolt adatokat első bejelentkezéskor felmásolja a felhőbe.
 
+## Fájlszerkezet
 
-Technológia
+```
+VagyonMentor/
+├── index.html   # teljes felület (fülek, modálok, bejelentkezés)
+├── script.js    # logika: állapot, árfolyam-lekérés, P&L, Firebase
+└── style.css    # dizájn
+```
 
-Vanilla HTML / CSS / JavaScript, build-eszköz és keretrendszer nélkül. Firebase (Authentication + Firestore) a felhő-szinkronhoz.
+## Beüzemelés
 
-Fájlok
+1. Hozz létre egy **Firebase projektet**, kapcsold be az **Authentication → E-mail/jelszó** és a **Cloud Firestore** szolgáltatást.
+2. Illeszd be a projekted konfigurációját a `script.js` Firebase-inicializáló részébe:
+   ```js
+   const firebaseConfig = {
+     apiKey: "…",
+     authDomain: "…",
+     projectId: "…",
+     // …
+   };
+   ```
+3. Állíts be Firestore biztonsági szabályokat, hogy minden felhasználó **csak a saját adatait** érje el.
+4. Tetszőleges statikus tárhelyre (pl. GitHub Pages) feltöltve azonnal működik.
 
-FájlTartalomindex.htmlAz alkalmazás teljes felülete (fülek, modalok, bejelentkezés)script.jsAlkalmazáslogika, Firebase inicializálás, adatkezelésstyle.cssMegjelenés, reszponzív nézetek, sötét mód
+## Megjegyzés az adatokról
 
-Saját másolat futtatása
-
-
-Hozz létre egy Firebase projektet (console.firebase.google.com)
-Kapcsold be az Authentication → Email/Password bejelentkezést
-Hozz létre egy Firestore Database-t, és állítsd be a hozzáférési szabályt:
-
-
-   rules_version = '2';
-   service cloud.firestore {
-     match /databases/{database}/documents {
-       match /vaults/{uid} {
-         allow read, write: if request.auth != null && request.auth.uid == uid;
-       }
-     }
-   }
-
-
-Írd be a saját firebaseConfig-odat a script.js elején
-Töltsd fel GitHub Pages-re, vagy nyisd meg helyben az index.html-t
-
-
-
-Ez egy személyes, saját használatra készült projekt.
+Az adatok a bejelentkezett fiókodhoz kötve a felhőben tárolódnak, így több eszközről is eléred őket. A **Fiók → Adatok exportja** funkcióval bármikor készíthetsz saját JSON biztonsági mentést.
