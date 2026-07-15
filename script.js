@@ -1050,11 +1050,7 @@ function renderCrypto() {
 
   const liveOpenEl = document.getElementById('cr-live-open');
   if (liveOpenEl) {
-    const unrealized = totalLiveOpen - totalOpen;
-    liveOpenEl.innerHTML = `
-      <div class="stat-value cyan">${fmt(totalLiveOpen)}</div>
-      <div class="stat-sub">Nem realizált P&L: <span class="${unrealized>=0?'green':'red'}">${unrealized>=0?'+':''}${fmt(unrealized)}</span></div>
-    `;
+    liveOpenEl.innerHTML = `<div class="stat-value cyan">${fmt(totalLiveOpen)}</div>`;
   }
 
   // Coin → teljes név / deviza / legutóbbi vétel dátuma
