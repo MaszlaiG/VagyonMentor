@@ -224,6 +224,7 @@ let state = {
 };
 
 let priceCache = {};
+let goldSpotLive = false;
 
 /* Tárolás: Firestore (felhő), a currentUid-t a firebase-init.js állítja be
    bejelentkezés után. A gyors, egymást követő mentéseket (pl. gépelés
@@ -528,6 +529,7 @@ async function refreshAllPrices() {
     const gp = await fetchGoldSpotHuf();
     if (gp) {
       state.goldSpot = Math.round(gp);
+      goldSpotLive = true;
       document.querySelectorAll('.refresh-status-gold').forEach(el =>
         el.textContent = '✅ ' + new Date().toLocaleTimeString('hu-HU'));
     }
@@ -2281,6 +2283,7 @@ function renderWatch() {
   if (goldBox || goldPledgedBox) {
     const spot = state.goldSpot || 28000;
     const pledgedSet = pledgedGoldIds();
+    const goldLiveBadge = goldSpotLive ? '<span class="badge badge-green">● élő</span>' : '';
 
     const buildAgg = items => {
       const agg = {};
@@ -2310,7 +2313,7 @@ function renderWatch() {
     if (goldBox) {
       const freeItems = state.goldItems.filter(g => !pledgedSet.has(g.id));
       if (freeItems.length) {
-        goldBox.innerHTML = Object.values(buildAgg(freeItems)).map(a => goldTile(a)).join('');
+        goldBox.innerHTML = Object.values(buildAgg(freeItems)).map(a => goldTile(a, goldLiveBadge)).join('');
       } else {
         goldBox.innerHTML = emptyTile('Nincs szabad (nem zálogba adott) aranytétel');
       }
@@ -2331,7 +2334,7 @@ function renderWatch() {
           agg[k].val += goldItemValue(g, spot);
         });
         goldPledgedBox.innerHTML = Object.values(agg).map(a =>
-          goldTile(a, `<span class="badge badge-purple">${escHtml(a.ticket)}</span>`)
+          goldTile(a, `<span class="badge badge-purple">${escHtml(a.ticket)}</span>` + (goldLiveBadge ? ' ' + goldLiveBadge : ''))
         ).join('');
       } else {
         goldPledgedBox.innerHTML = emptyTile('Nincs zálogban lévő aranytétel');
