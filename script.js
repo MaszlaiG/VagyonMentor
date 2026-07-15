@@ -2231,7 +2231,7 @@ function renderWatch() {
         const pl = a.val - a.inv;
         const plPct = a.inv ? pl/a.inv*100 : 0;
         const badge = a.live ? `<span class="badge badge-green">● élő</span>` : `<span class="badge badge-yellow">manuális</span>`;
-        return dashTile(`${a.ticker} <span class="badge badge-cyan">${a.cur}</span>`, badge, [
+        return dashTile(`${a.ticker}`, badge, [
           ['Mennyiség', `${fmtNum(a.qty)} db${a.lots>1?` · ${a.lots} tétel`:''}`, ''],
           ['Befektetett (Ft)', fmt(a.inv), ''],
           ['Jelenlegi érték (Ft)', fmt(a.val), 'cyan'],
@@ -2251,7 +2251,6 @@ function renderWatch() {
         const live = getLivePrice(coin);
         const liveVal = live ? openQty*live : null;
         const unreal = liveVal!==null ? liveVal-openCost : null;
-        const updatedAt = getLiveUpdatedAt(coin);
         const badge = live ? `<span class="badge badge-green">● élő</span>` : '';
         const rows = [
           ['Realizált P&L', fmt(c.realized), c.realized>=0?'green':'red'],
@@ -2261,7 +2260,7 @@ function renderWatch() {
           rows.push(['Aktuális eladási érték', fmt(liveVal), 'cyan']);
           rows.push(['Nem realizált P&L', `${unreal>=0?'+':''}${fmt(unreal)}`, unreal>=0?'green':'red']);
         }
-        return dashTile(coin, badge, rows, liveVal!==null && updatedAt ? `Frissítve: ${updatedAt}` : '');
+        return dashTile(coin, badge, rows, '');
       }).join('');
     } else cryptoBox.innerHTML = emptyTile('Nincs kripto');
   }
