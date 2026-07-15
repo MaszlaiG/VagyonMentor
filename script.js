@@ -579,16 +579,31 @@ function showTab(id) {
 
 function toggleNav() {
   const nav = document.getElementById('main-nav');
-  const icon = document.getElementById('nav-toggle-icon');
+  const btn = document.getElementById('hamburger-btn');
   const open = nav.classList.toggle('open');
-  if (icon) icon.textContent = open ? '✕' : '☰';
+  if (btn) btn.classList.toggle('open', open);
+  if (open) {
+    // Kattintás a nav-on kívülre → bezár
+    setTimeout(() => document.addEventListener('click', navOutsideClick), 0);
+  } else {
+    document.removeEventListener('click', navOutsideClick);
+  }
+}
+
+function navOutsideClick(e) {
+  const nav = document.getElementById('main-nav');
+  const btn = document.getElementById('hamburger-btn');
+  if (nav && !nav.contains(e.target) && btn && !btn.contains(e.target)) {
+    closeNav();
+  }
 }
 
 function closeNav() {
   const nav = document.getElementById('main-nav');
-  const icon = document.getElementById('nav-toggle-icon');
+  const btn = document.getElementById('hamburger-btn');
   if (nav) nav.classList.remove('open');
-  if (icon) icon.textContent = '☰';
+  if (btn) btn.classList.remove('open');
+  document.removeEventListener('click', navOutsideClick);
 }
 
 function openModal(id) {
