@@ -739,6 +739,79 @@ function deleteStock(id) {
   save(); renderAll();
 }
 
+/* ---- Részvény eladása (a kriptó Eladás mintájára) ---- */
+let stockSellId = null;
+function openStockSell(id) {
+  const s = state.stocks.find(x => x.id === id);
+  if (!s) return;
+  stockSellId = id;
+  const cur = s.currency || 'HUF';
+  const rate = rateForCurrency(cur);
+  const avgN = (s.avgNative != null) ? s.avgNative : (rate ? s.avg / rate : s.avg);
+  const liveHuf = getLivePrice(s.ticker) || s.price;
+  const curPriceN = rate ? liveHuf / rate : liveHuf;
+  const sym = cur === 'HUF' ? 'Ft' : cur;
+  document.getElementById('ss-info').innerHTML =
+    `<strong style="color:var(--text);font-size:14px">${s.ticker}</strong>${s.name ? ' · ' + escHtml(s.name) : ''} · elérhető: <strong style="color:var(--accent2)">${fmtNum(s.qty)}</strong> db · átlagár: ${fmtCur(avgN, cur)}`;
+  document.getElementById('ss-price-label').textContent = `Eladási ár / db (${sym})`;
+  document.getElementById('ss-qty').value = s.qty;
+  document.getElementById('ss-price').value = curPriceN ? curPriceN.toFixed(2) : '';
+  document.getElementById('ss-date').value = now();
+  document.getElementById('ss-error').style.display = 'none';
+  updateStockSalePL();
+  openModal('stock-sale-modal');
+}
+function updateStockSalePL() {
+  const s = state.stocks.find(x => x.id === stockSellId);
+  if (!s) return;
+  const cur = s.currency || 'HUF';
+  const rate = rateForCurrency(cur);
+  const avgN = (s.avgNative != null) ? s.avgNative : (rate ? s.avg / rate : s.avg);
+  const qty = parseFloat(document.getElementById('ss-qty').value) || 0;
+  const price = parseFloat(document.getElementById('ss-price').value) || 0;
+  const plN = qty * (price - avgN);
+  const el = document.getElementById('ss-pl');
+  if (el) el.innerHTML = `Eredmény (P&L): <strong class="${plN>=0?'green':'red'}">${plN>=0?'+':''}${fmtCur(plN, cur)}</strong>`;
+}
+async function confirmStockSell() {
+  const s = state.stocks.find(x => x.id === stockSellId);
+  if (!s) return;
+  const cur = s.currency || 'HUF';
+  const qty = parseFloat(document.getElementById('ss-qty').value) || 0;
+  const priceNative = parseFloat(document.getElementById('ss-price').value) || 0;
+  const date = document.getElementById('ss-date').value || now();
+  const errEl = document.getElementById('ss-error');
+  if (!qty || !priceNative) { errEl.textContent = 'Adj meg eladott mennyiséget és eladási árat.'; errEl.style.display = 'block'; return; }
+  if (qty > s.qty + 1e-9) { errEl.textContent = `Legfeljebb ${fmtNum(s.qty)} db adható el.`; errEl.style.display = 'block'; return; }
+  const fxRate = await fxRateForDate(cur, date);
+  const priceHuf = priceNative * fxRate;
+  const costHuf = qty * s.avg;
+  const proceedsHuf = qty * priceHuf;
+  const rate = rateForCurrency(cur);
+  const avgN = (s.avgNative != null) ? s.avgNative : (rate ? s.avg / rate : s.avg);
+  if (!state.stockSales) state.stockSales = [];
+  state.stockSales.push({
+    id: uid(), ticker: s.ticker, name: s.name || '', qty,
+    avgNative: avgN, priceNative, currency: cur,
+    proceedsHuf, costHuf, pl: proceedsHuf - costHuf, date
+  });
+  s.qty -= qty;
+  if (s.qty <= 1e-9) state.stocks = state.stocks.filter(x => x.id !== s.id);
+  save();
+  closeModal('stock-sale-modal');
+  stockSellId = null;
+  renderAll();
+}
+function deleteStockFromSale() {
+  if (!stockSellId) return;
+  if (!confirm('Biztosan törlöd ezt a részvénytételt (eladás rögzítése nélkül)?')) return;
+  state.stocks = state.stocks.filter(x => x.id !== stockSellId);
+  save();
+  closeModal('stock-sale-modal');
+  stockSellId = null;
+  renderAll();
+}
+
 // Visszaadja a részvény éves osztalékhozamát %-ban.
 // Új adat: s.divYield (%). Régi adat: s.div (Ft/részvény) -> hozammá számolva.
 
@@ -802,7 +875,7 @@ function renderStocks() {
   document.getElementById('stock-refresh-bar').innerHTML = '';
 
   if (!state.stocks.length) {
-    tbody.innerHTML = '<tr><td colspan="11" style="color:var(--muted);text-align:center;padding:20px">Nincs részvény</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="12" style="color:var(--muted);text-align:center;padding:20px">Nincs részvény</td></tr>';
     document.getElementById('st-sum-invested').textContent = fmt(0);
     document.getElementById('st-sum-current').textContent = fmt(0);
     const plEl0 = document.getElementById('st-sum-pl');
@@ -838,27 +911,23 @@ function renderStocks() {
     const plPct = investedN ? (plN/investedN*100) : 0;
     const annualDivN = stockIsCash(s) ? currentN * divYield / 100 : 0;
 
-    const updatedAt = getLiveUpdatedAt(s.ticker);
-    const liveBadge = livePrice
-      ? `<span class="badge badge-green" title="Frissítve: ${updatedAt}">● élő</span>`
-      : `<span class="badge badge-yellow" title="Manuális ár">manuális</span>`;
     return `
       <tr>
         <td>
           <strong>${s.ticker}</strong>
           ${s.name ? `<div style="font-size:10px;color:var(--muted)">${escHtml(s.name)}</div>` : ''}
-          <div style="margin-top:3px"><span class="badge ${stockIsCash(s)?'badge-green':'badge-purple'}" style="font-size:9px" title="${stockDivFreqLabel(s)}">${stockIsCash(s)?'kifizető':'visszaforgató'}</span></div>
         </td>
+        <td><span class="badge ${stockIsCash(s)?'badge-green':'badge-gray'}" title="${stockDivFreqLabel(s)}">${stockIsCash(s)?'Dist':'Acc'}</span></td>
         <td style="color:var(--muted)">${s.buyDate||'—'}</td>
         <td>${fmtNum(s.qty)}</td>
         <td>${fmtCur(avgN, cur)}</td>
-        <td>${fmtCur(curPriceN, cur)} ${liveBadge}</td>
+        <td>${fmtCur(curPriceN, cur)}</td>
         <td>${fmtCur(investedN, cur)}</td>
         <td><strong>${fmtCur(currentN, cur)}</strong></td>
         <td class="${plN>=0?'green':'red'}" style="font-weight:500">${plN>=0?'+':''}${fmtCur(plN, cur)} <span style="font-size:10px">(${plPct.toFixed(1)}%)</span></td>
         <td class="yellow">${fmtCur(annualDivN, cur)}</td>
         <td>${divYield.toFixed(2)}%</td>
-        <td><button class="btn btn-danger btn-sm" onclick="deleteStock('${s.id}')">×</button></td>
+        <td><button class="btn btn-sm" onclick="openStockSell('${s.id}')">Eladás</button></td>
       </tr>
     `;
   }).join('');
@@ -871,13 +940,6 @@ function renderStocks() {
   plEl.className = 'stat-value ' + (totalPL>=0?'green':'red');
   document.getElementById('st-sum-pl-card').className = 'card ' + (totalPL>=0?'card-stat-green':'card-stat-red');
   document.getElementById('st-sum-div').textContent = fmt(totalDiv);
-  const netEl = document.getElementById('st-sum-div-net');
-  if (netEl) {
-    const t = taxCfg();
-    netEl.textContent = totalDiv > 0
-      ? `Nettó (adózás után): ${fmt(totalDiv * dividendNetFactor())} · SZJA ${t.szja}% + SZOCHO ${t.szocho}% + USA ${t.usFee}%`
-      : '';
-  }
 }
 
 async function addCryptoTrade() {
@@ -1031,52 +1093,47 @@ function renderCrypto() {
     `;
   }
 
-  // Coin → teljes név térkép a rögzített ügyletekből
-  const nameMap = {};
-  state.crypto.forEach(t => { if (t.name) nameMap[t.coin] = t.name; });
+  // Coin → teljes név / deviza / legutóbbi vétel dátuma
+  const nameMap = {}, coinCur = {}, coinLastDate = {};
+  state.crypto.forEach(t => {
+    if (t.name) nameMap[t.coin] = t.name;
+    if (!coinCur[t.coin]) coinCur[t.coin] = t.currency || 'HUF';
+    if (t.type === 'buy' && (!coinLastDate[t.coin] || (t.date||'') > coinLastDate[t.coin])) coinLastDate[t.coin] = t.date || '';
+  });
 
-  // PORTFÓLIÓ — coinonként aggregált pozíció (a részvények mintájára)
+  // PORTFÓLIÓ — coinonként aggregált pozíció, saját devizanemben (a részvények mintájára)
   const holdingsBody = document.getElementById('crypto-holdings-tbody');
   if (holdingsBody) {
     holdingsBody.innerHTML = Object.entries(coins).map(([coin, c]) => {
       const openQty = c.buys.reduce((a,b)=>a+b.qty,0);
-      const openCost = c.buys.reduce((a,b)=>a+b.qty*b.price,0);
-      const live = getLivePrice(coin);
-      const avg = openQty ? openCost/openQty : 0;
-      const curVal = live ? openQty*live : openCost;
-      const pl = curVal - openCost;
-      const plPct = openCost ? pl/openCost*100 : 0;
-      const liveBadge = live
-        ? `<span class="badge badge-green" title="Frissítve: ${getLiveUpdatedAt(coin)}">● élő</span>`
-        : `<span class="badge badge-yellow">manuális</span>`;
+      if (openQty <= 0) return '';
+      const openCostHuf = c.buys.reduce((a,b)=>a+b.qty*b.price,0);
+      const liveHuf = getLivePrice(coin);
+      const curPriceHuf = liveHuf || (openCostHuf / openQty);
+      const curValHuf = openQty * curPriceHuf;
+
+      const cur = coinCur[coin] || 'HUF';
+      const rate = rateForCurrency(cur);
+      const openCostN = rate ? openCostHuf/rate : openCostHuf;
+      const avgN = openCostN / openQty;
+      const curPriceN = rate ? curPriceHuf/rate : curPriceHuf;
+      const curValN = rate ? curValHuf/rate : curValHuf;
+      const plN = curValN - openCostN;
+      const plPct = openCostN ? plN/openCostN*100 : 0;
+
       return `<tr>
         <td><strong>${coin}</strong>${nameMap[coin]?`<div style="font-size:10px;color:var(--muted)">${escHtml(nameMap[coin])}</div>`:''}</td>
-        <td>${openQty>0?fmtNum(openQty):'—'}</td>
-        <td>${openQty>0?fmt(avg):'—'}</td>
-        <td>${openQty>0?fmt(live||avg)+' '+liveBadge:'—'}</td>
-        <td>${openQty>0?fmt(openCost):'—'}</td>
-        <td class="cyan">${openQty>0?fmt(curVal):'—'}</td>
-        <td class="${pl>=0?'green':'red'}">${openQty>0?`${pl>=0?'+':''}${fmt(pl)} <span style="font-size:10px">(${plPct.toFixed(1)}%)</span>`:'—'}</td>
-        <td class="${c.realized>=0?'green':'red'}">${c.realized?`${c.realized>=0?'+':''}${fmt(c.realized)}`:'—'}</td>
-        <td>${openQty>0?`<button class="btn btn-sm" onclick="openSellModal('${coin}')">Eladás</button>`:''}</td>
+        <td style="color:var(--muted)">${coinLastDate[coin]||'—'}</td>
+        <td>${fmtNum(openQty)}</td>
+        <td>${fmtCur(avgN, cur)}</td>
+        <td>${fmtCur(curPriceN, cur)}</td>
+        <td>${fmtCur(openCostN, cur)}</td>
+        <td><strong>${fmtCur(curValN, cur)}</strong></td>
+        <td class="${plN>=0?'green':'red'}" style="font-weight:500">${plN>=0?'+':''}${fmtCur(plN, cur)} <span style="font-size:10px">(${plPct.toFixed(1)}%)</span></td>
+        <td><button class="btn btn-sm" onclick="openSellModal('${coin}')">Eladás</button></td>
       </tr>`;
     }).join('') || '<tr><td colspan="9" style="color:var(--muted);text-align:center;padding:20px">Nincs kriptó pozíció</td></tr>';
   }
-
-  // TRANZAKCIÓK — nyers ügyletnapló (javításhoz/törléshez)
-  const tbody = document.getElementById('crypto-tbody');
-  tbody.innerHTML = [...state.crypto].sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(t => `
-    <tr>
-      <td>${t.date}</td>
-      <td><strong>${t.coin}</strong></td>
-      <td><span class="badge ${t.type==='buy'?'badge-green':'badge-yellow'}">${t.type==='buy'?'Vétel':'Eladás'}</span></td>
-      <td>${fmtNum(t.qty)}</td>
-      <td>${fmt(t.price)}</td>
-      <td>${fmt(t.qty*t.price)}</td>
-      <td class="red">${t.fee?fmt(t.fee):'-'}</td>
-      <td><button class="btn btn-danger btn-sm" onclick="deleteCryptoTrade('${t.id}')">×</button></td>
-    </tr>
-  `).join('') || '<tr><td colspan="8" style="color:var(--muted);text-align:center;padding:20px">Nincs ügylet</td></tr>';
 }
 
 function calcLoanEndDate() {
@@ -1763,25 +1820,27 @@ async function fetchGoldPrice() {
   await refreshAllPrices();
 }
 
+function pledgeTicketForGold(goldId) {
+  const p = (state.pledges||[]).find(pl => !pl.redeemed && (
+    (Array.isArray(pl.goldIds) && pl.goldIds.includes(goldId)) || pl.goldId === goldId));
+  return p ? (p.ticketNo || '') : '';
+}
+
 function renderGold() {
   const spot = state.goldSpot || 28000;
 
   let totalGrams = 0, totalCost = 0, totalValue = 0;
   const tbody = document.getElementById('gold-tbody');
+  const pbody = document.getElementById('gold-pledged-tbody');
   if (!tbody) return;
 
   const sortedGold = [...state.goldItems].sort((a,b) =>
     (a.grams - b.grams) || (a.date||'').localeCompare(b.date||''));
 
-  tbody.innerHTML = sortedGold.map(g => {
-    const value = goldItemValue(g, spot);
-    const pl = value - g.cost;
-    const pledged = pledgedGoldIds().has(g.id);
-    totalGrams += g.grams;
-    totalCost  += g.cost;
-    totalValue += value;
-    return `<tr>
-      <td><strong>${g.name}</strong>${pledged ? ' <span class="badge badge-purple">zálogban</span>' : ''}</td>
+  const pledgedSet = pledgedGoldIds();
+
+  const commonCells = (g, value, pl) => `
+      <td><strong>${g.name}</strong></td>
       <td style="color:var(--muted)">${g.code||'—'}</td>
       <td><span class="badge badge-yellow">${g.form}</span></td>
       <td>${g.purity}</td>
@@ -1789,10 +1848,25 @@ function renderGold() {
       <td style="color:var(--muted)">${g.date||'—'}</td>
       <td>${fmt(g.cost)}</td>
       <td class="cyan">${fmt(value)}</td>
-      <td class="${pl>=0?'green':'red'}">${pl>=0?'+':''}${fmt(pl)}</td>
-      <td><button class="btn btn-danger btn-sm" onclick="deleteGold('${g.id}')">×</button></td>
-    </tr>`;
-  }).join('') || '<tr><td colspan="10" style="color:var(--muted);text-align:center;padding:20px">Nincs aranytétel</td></tr>';
+      <td class="${pl>=0?'green':'red'}">${pl>=0?'+':''}${fmt(pl)}</td>`;
+
+  const freeRows = [], pledgedRows = [];
+  sortedGold.forEach(g => {
+    const value = goldItemValue(g, spot);
+    const pl = value - g.cost;
+    totalGrams += g.grams;
+    totalCost  += g.cost;
+    totalValue += value;
+    if (pledgedSet.has(g.id)) {
+      const ticket = pledgeTicketForGold(g.id);
+      pledgedRows.push(`<tr>${commonCells(g, value, pl)}<td><span class="badge badge-purple">${ticket ? escHtml(ticket) : '—'}</span></td></tr>`);
+    } else {
+      freeRows.push(`<tr>${commonCells(g, value, pl)}<td><button class="btn btn-sm" onclick="openGoldSell('${g.id}')">Eladás</button></td></tr>`);
+    }
+  });
+
+  tbody.innerHTML = freeRows.join('') || '<tr><td colspan="10" style="color:var(--muted);text-align:center;padding:20px">Nincs eladható aranytétel</td></tr>';
+  if (pbody) pbody.innerHTML = pledgedRows.join('') || '<tr><td colspan="10" style="color:var(--muted);text-align:center;padding:20px">Nincs zálogosított aranytétel</td></tr>';
 
   const totalPL = totalValue - totalCost;
   document.getElementById('gd-total-grams').textContent = fmtNum(totalGrams) + ' g';
@@ -1802,6 +1876,53 @@ function renderGold() {
   plEl.textContent = (totalPL>=0?'+':'') + fmt(totalPL);
   plEl.className = 'stat-value ' + (totalPL>=0?'green':'red');
   document.getElementById('gd-total-pl-card').className = 'card ' + (totalPL>=0?'card-stat-green':'card-stat-red');
+}
+
+/* ---- Aranytétel eladása (a kriptó Eladás mintájára) ---- */
+let goldSellId = null;
+function openGoldSell(id) {
+  const g = state.goldItems.find(x => x.id === id);
+  if (!g) return;
+  goldSellId = id;
+  const spot = state.goldSpot || 28000;
+  const value = goldItemValue(g, spot);
+  document.getElementById('gs-info').innerHTML =
+    `<strong style="color:var(--text);font-size:14px">${escHtml(g.name)}</strong> · ${fmtNum(g.grams)} g · vételár: ${fmt(g.cost)} · becsült érték: <strong style="color:var(--accent2)">${fmt(value)}</strong>`;
+  document.getElementById('gs-price').value = Math.round(value).toLocaleString('hu-HU');
+  document.getElementById('gs-date').value = now();
+  updateGoldSalePL();
+  openModal('gold-sale-modal');
+}
+function updateGoldSalePL() {
+  const g = state.goldItems.find(x => x.id === goldSellId);
+  if (!g) return;
+  const price = parseAmount('gs-price');
+  const pl = price - g.cost;
+  const el = document.getElementById('gs-pl');
+  if (el) el.innerHTML = `Eredmény (P&L): <strong class="${pl>=0?'green':'red'}">${pl>=0?'+':''}${fmt(pl)}</strong>`;
+}
+function confirmGoldSell() {
+  const g = state.goldItems.find(x => x.id === goldSellId);
+  if (!g) return;
+  const price = parseAmount('gs-price');
+  const date = document.getElementById('gs-date').value || now();
+  if (!price) return;
+  if (!state.goldSales) state.goldSales = [];
+  state.goldSales.push({ id: uid(), goldId: g.id, name: g.name, grams: g.grams, cost: g.cost, salePrice: price, pl: price - g.cost, date });
+  state.goldItems = state.goldItems.filter(x => x.id !== g.id);
+  save();
+  closeModal('gold-sale-modal');
+  goldSellId = null;
+  renderAll();
+}
+function deleteGoldFromSale() {
+  if (!goldSellId) return;
+  if (!confirm('Biztosan törlöd ezt az aranytételt (eladás rögzítése nélkül)?')) return;
+  state.goldItems = state.goldItems.filter(x => x.id !== goldSellId);
+  save();
+  closeModal('gold-sale-modal');
+  goldSellId = null;
+  renderAll();
 }
 
 function goldTotalValue() {
@@ -1828,7 +1949,7 @@ function addService() {
   const cycle   = document.getElementById('sv-cycle').value;
   const day     = parseInt(document.getElementById('sv-day').value)||0;
   if (!name || !amount) return;
-  state.services.push({ id:uid(), name, cat, amount, cycle, day, active:true, priceHistory: [{ date: now(), amount }] });
+  state.services.push({ id:uid(), name, cat, amount, cycle, day, active:true });
   save();
   ['sv-name','sv-amount','sv-day'].forEach(id => document.getElementById(id).value = '');
   document.querySelectorAll('#sv-cat input:checked').forEach(i => i.checked = false);
@@ -1859,6 +1980,17 @@ function nextChargeDate(day) {
   return d;
 }
 
+function setServiceAmount(id, val) {
+  const s = state.services.find(x => x.id === id);
+  if (!s) return;
+  const amount = parseInt(String(val).replace(/\D/g,'')) || 0;
+  if (!amount || amount === s.amount) { renderServices(); return; }
+  s.amount = amount;
+  save();
+  renderServices();
+  renderDashboard();
+}
+
 function renderServices() {
   const tbody = document.getElementById('services-tbody');
   if (!tbody) return;
@@ -1879,14 +2011,16 @@ function renderServices() {
       : `<span class="badge" style="background:rgba(107,114,128,0.15);color:var(--muted);cursor:pointer" title="Kattints az aktiváláshoz" onclick="toggleService('${s.id}')">⏸ Szünetel</span>`;
     return `<tr style="${s.active?'':'opacity:0.5'}">
       <td><strong>${s.name}</strong><br><span style="font-size:10px;color:var(--muted)">${Array.isArray(s.cat) ? (s.cat.join(', ') || '—') : (s.cat || '—')}</span></td>
-      <td>${fmt(s.amount)}${serviceTrendBadge(s)}</td>
+      <td><input type="text" inputmode="numeric" value="${Math.round(s.amount).toLocaleString('hu-HU')}"
+            onblur="setServiceAmount('${s.id}', this.value)"
+            oninput="this.value=this.value.replace(/[^0-9 ]/g,'')"
+            style="width:110px;font-size:12px;padding:5px 8px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2)"> Ft</td>
       <td>${CYCLE_LABEL[s.cycle]||s.cycle}</td>
       <td>${s.day ? s.day + '.' : '—'}</td>
       <td class="red">${fmt(monthly)}</td>
       <td>${statusBadge}</td>
       <td>
         <div class="row-actions">
-          <button class="btn btn-secondary btn-sm" onclick="openPriceModal('${s.id}')" title="Díjtörténet / áremelés-csökkenés rögzítése">📈 Díj</button>
           <button class="btn btn-danger btn-sm" onclick="deleteService('${s.id}')">×</button>
         </div>
       </td>
@@ -2152,8 +2286,8 @@ function renderDashboard() {
     drEl.textContent = '—';
     drEl.className = 'stat-value yellow';
   }
-  // A százalék alatt csak a hónapra vetített osztalék (HUF)
-  drSub.textContent = `${fmt(monthlyDiv)}/hó osztalék`;
+  // A százalék alatt a hónapra vetített NETTÓ osztalék (adózás után, HUF)
+  drSub.textContent = `${fmt(monthlyDiv * dividendNetFactor())}/hó nettó osztalék`;
   dm.innerHTML = `
     <div class="stat-value yellow" style="font-size:24px">${fmt(totalMonthly)}</div>
     <div class="stat-sub" style="margin-bottom:12px">Havi törlesztő + fix kiadások</div>

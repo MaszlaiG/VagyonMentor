@@ -135,7 +135,6 @@
         <div class="card card-stat-yellow">
           <div class="card-title">Éves osztalék</div>
           <div class="stat-value yellow" id="st-sum-div">0 Ft</div>
-          <div class="stat-sub" id="st-sum-div-net"></div>
         </div>
       </div>
 
@@ -144,10 +143,38 @@
         <div id="stock-refresh-bar"></div>
         <div class="scroll-table">
           <table>
-            <thead><tr><th>Ticker</th><th>Vétel dátuma</th><th>Db</th><th>Vételár</th><th>Jelenlegi ár</th><th>Befektetett</th><th>Jelenlegi érték</th><th>P&amp;L</th><th>Éves Osztalék</th><th>Hozam %</th><th></th></tr></thead>
+            <thead><tr><th>Ticker</th><th>Típus</th><th>Vétel dátuma</th><th>Db</th><th>Vételár</th><th>Jelenlegi ár</th><th>Befektetett</th><th>Jelenlegi érték</th><th>P&amp;L</th><th>Éves Osztalék</th><th>Osztalék</th><th></th></tr></thead>
             <tbody id="stock-tbody"></tbody>
           </table>
         </div>
+      </div>
+    </div>
+
+    <div class="modal" id="stock-sale-modal" onclick="if(event.target===this)closeModal('stock-sale-modal')">
+      <div class="modal-card" style="max-width:460px">
+        <div class="modal-head">
+          <div class="section-title" style="font-size:18px">Részvény eladása</div>
+          <button class="btn btn-secondary btn-sm" onclick="closeModal('stock-sale-modal')">✕</button>
+        </div>
+        <div id="ss-info" style="font-size:12px;color:var(--muted);margin-bottom:16px"></div>
+        <div class="form-grid fg2" style="margin-bottom:12px">
+          <div>
+            <label>Eladott darabszám</label>
+            <input type="number" id="ss-qty" placeholder="0" step="any" oninput="updateStockSalePL()">
+          </div>
+          <div>
+            <label id="ss-price-label">Eladási ár / db</label>
+            <input type="number" id="ss-price" placeholder="0" step="any" oninput="updateStockSalePL()">
+          </div>
+          <div>
+            <label>Eladás dátuma</label>
+            <input type="date" id="ss-date">
+          </div>
+        </div>
+        <div id="ss-pl" style="font-size:12px;margin-bottom:12px"></div>
+        <div id="ss-error" style="color:var(--red);font-size:11px;margin-bottom:12px;display:none"></div>
+        <button class="btn" onclick="confirmStockSell()" style="width:100%">Eladás rögzítése</button>
+        <button class="btn btn-secondary btn-sm" onclick="deleteStockFromSale()" style="width:100%;margin-top:8px">Téves tétel törlése</button>
       </div>
     </div>
 
@@ -189,8 +216,8 @@
           <div>
             <label>Osztalék típusa</label>
             <select id="st-divtype">
-              <option value="cash">Kifizető (készpénzes)</option>
-              <option value="acc">Visszaforgató (újrabefektető)</option>
+              <option value="cash">Disztribúciós / Osztalékfizető</option>
+              <option value="acc">Akkumulációs / Felhalmozó</option>
             </select>
           </div>
           <div>
@@ -256,16 +283,8 @@
         <div class="card-title">Portfólió</div>
         <div class="scroll-table">
           <table>
-            <thead><tr><th>Coin</th><th>Nyitott db</th><th>Átlag vételár</th><th>Jelenlegi ár</th><th>Befektetett</th><th>Jelenlegi érték</th><th>P&amp;L</th><th>Realizált P&amp;L</th><th></th></tr></thead>
+            <thead><tr><th>Coin</th><th>Vétel dátuma</th><th>Db</th><th>Vételár</th><th>Jelenlegi ár</th><th>Befektetett</th><th>Jelenlegi érték</th><th>P&amp;L</th><th></th></tr></thead>
             <tbody id="crypto-holdings-tbody"></tbody>
-          </table>
-        </div>
-        <div class="divider"></div>
-        <div class="card-title" style="margin-bottom:12px">Tranzakciók</div>
-        <div class="scroll-table">
-          <table>
-            <thead><tr><th>Dátum</th><th>Coin</th><th>Típus</th><th>Mennyiség</th><th>Ár</th><th>Érték</th><th>Díj</th><th></th></tr></thead>
-            <tbody id="crypto-tbody"></tbody>
           </table>
         </div>
       </div>
@@ -356,7 +375,40 @@
           </table>
         </div>
       </div>
+
+      <div class="card" style="margin-top:16px">
+        <div class="card-title">Zálogosított Aranytételek</div>
+        <div class="scroll-table">
+          <table>
+            <thead><tr><th>Megnevezés</th><th>Kód</th><th>Forma</th><th>Tisztaság</th><th>Tömeg</th><th>Vétel dátuma</th><th>Vételár</th><th>Jelenlegi érték</th><th>P&amp;L</th><th>Zálogjegy</th></tr></thead>
+            <tbody id="gold-pledged-tbody"></tbody>
+          </table>
+        </div>
+      </div>
     </div>
+
+      <div class="modal" id="gold-sale-modal" onclick="if(event.target===this)closeModal('gold-sale-modal')">
+        <div class="modal-card" style="max-width:460px">
+          <div class="modal-head">
+            <div class="section-title" style="font-size:18px">Aranytétel eladása</div>
+            <button class="btn btn-secondary btn-sm" onclick="closeModal('gold-sale-modal')">✕</button>
+          </div>
+          <div id="gs-info" style="font-size:12px;color:var(--muted);margin-bottom:16px"></div>
+          <div class="form-grid fg2" style="margin-bottom:12px">
+            <div>
+              <label>Eladási ár összesen (Ft)</label>
+              <input type="text" inputmode="numeric" id="gs-price" placeholder="0" oninput="formatThousands(this);updateGoldSalePL()">
+            </div>
+            <div>
+              <label>Eladás dátuma</label>
+              <input type="date" id="gs-date">
+            </div>
+          </div>
+          <div id="gs-pl" style="font-size:12px;margin-bottom:12px"></div>
+          <button class="btn" onclick="confirmGoldSell()" style="width:100%">Eladás rögzítése</button>
+          <button class="btn btn-secondary btn-sm" onclick="deleteGoldFromSale()" style="width:100%;margin-top:8px">Téves tétel törlése</button>
+        </div>
+      </div>
 
       <div class="modal" id="gold-modal" onclick="if(event.target===this)closeModal('gold-modal')">
         <div class="modal-card">
@@ -678,26 +730,7 @@
       </div>
     </div>
 
-    <div class="modal" id="price-modal" onclick="if(event.target===this)closeModal('price-modal')">
-      <div class="modal-card" style="max-width:460px">
-        <div class="modal-head">
-          <div class="section-title" style="font-size:18px" id="price-modal-title">Díjtörténet</div>
-          <button class="btn btn-secondary btn-sm" onclick="closeModal('price-modal')">✕</button>
-        </div>
-        <div id="price-history-list" style="margin-bottom:16px"></div>
-        <div class="form-grid fg2" style="margin-bottom:12px">
-          <div>
-            <label>Új díj (Ft)</label>
-            <input type="text" inputmode="numeric" id="pc-amount" placeholder="0" oninput="formatThousands(this)">
-          </div>
-          <div>
-            <label>Hatályos dátum</label>
-            <input type="date" id="pc-date">
-          </div>
-        </div>
-        <button class="btn" onclick="addPriceChange()" style="width:100%">+ Díjváltozás rögzítése</button>
-      </div>
-    </div>
+    <div class="modal" id="price-modal-REMOVED" style="display:none"></div>
   </div>
 </div>
 
