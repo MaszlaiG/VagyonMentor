@@ -715,7 +715,7 @@ async function addStock() {
   save();
   ['st-ticker','st-name','st-qty','st-avg','st-div'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('st-date').value = now();
-  const dtSel = document.getElementById('st-divtype'); if (dtSel) dtSel.value = 'cash';
+  const dtSel = document.getElementById('st-divtype'); if (dtSel) dtSel.value = 'none';
   updateStockDivType();
   closeModal('stock-modal');
   renderAll();
