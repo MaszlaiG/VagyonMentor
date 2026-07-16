@@ -1113,12 +1113,16 @@ function openLoanDetail(id) {
   if (!l) return;
   document.getElementById('loan-list-view').style.display = 'none';
   document.getElementById('loan-detail-view').style.display = 'block';
+  const laBtn = document.getElementById('loan-add-btn');
+  if (laBtn) laBtn.style.display = 'none';
   document.getElementById('loan-detail-content').innerHTML = buildLoanDetailHTML(l);
 }
 
 function closeLoanDetail() {
   document.getElementById('loan-list-view').style.display = 'block';
   document.getElementById('loan-detail-view').style.display = 'none';
+  const laBtn = document.getElementById('loan-add-btn');
+  if (laBtn) laBtn.style.display = '';
 }
 
 function getFirstPaymentDate(l) {
@@ -1677,6 +1681,112 @@ function pledgeTotalDebt() {
   return state.pledges.reduce((a,p) => a + (p.redeemed ? 0 : calcPledgeDebt(p).currentDebt), 0);
 }
 
+let _openPledgeId = null;
+function openPledgeDetail(id) {
+  const p = state.pledges.find(x => x.id === id);
+  if (!p) return;
+  _openPledgeId = id;
+  const lv = document.getElementById('pledge-list-view');
+  const dv = document.getElementById('pledge-detail-view');
+  const addBtn = document.getElementById('pledge-add-btn');
+  if (lv) lv.style.display = 'none';
+  if (dv) dv.style.display = 'block';
+  if (addBtn) addBtn.style.display = 'none';
+  const c = document.getElementById('pledge-detail-content');
+  if (c) c.innerHTML = buildPledgeDetailHTML(p);
+}
+
+function closePledgeDetail() {
+  _openPledgeId = null;
+  const lv = document.getElementById('pledge-list-view');
+  const dv = document.getElementById('pledge-detail-view');
+  const addBtn = document.getElementById('pledge-add-btn');
+  if (lv) lv.style.display = 'block';
+  if (dv) dv.style.display = 'none';
+  if (addBtn) addBtn.style.display = '';
+}
+
+function buildPledgeDetailHTML(p) {
+  const d = calcPledgeDebt(p);
+  const spot = state.goldSpot || 28000;
+  const ids = Array.isArray(p.goldIds) ? p.goldIds : (p.goldId ? [p.goldId] : []);
+  let totGrams = 0, totCost = 0, totVal = 0, liveCount = 0;
+  const rowsHtml = ids.map((id, i) => {
+    const g = state.goldItems.find(x => x.id === id);
+    if (!g) {
+      const fb = (p.goldNames && p.goldNames[i]) || p.goldName || '—';
+      return `<tr><td colspan="9" style="color:var(--muted)">${escHtml(fb)} (törölt tétel)</td></tr>`;
+    }
+    liveCount++;
+    const val = goldItemValue(g, spot);
+    const pl = val - g.cost;
+    const plPct = g.cost ? pl/g.cost*100 : 0;
+    totGrams += g.grams; totCost += g.cost; totVal += val;
+    return `<tr>
+      <td><strong>${escHtml(g.name)}</strong></td>
+      <td style="color:var(--muted)">${g.code||'—'}</td>
+      <td><span class="badge badge-yellow">${g.form}</span></td>
+      <td>${g.purity}</td>
+      <td>${fmtNum(g.grams)} g</td>
+      <td style="color:var(--muted)">${g.date||'—'}</td>
+      <td>${fmt(g.cost)}</td>
+      <td class="cyan">${fmt(val)}</td>
+      <td class="${pl>=0?'green':'red'}">${pl>=0?'+':''}${fmt(pl)} <span style="font-size:10px">(${pl>=0?'+':''}${plPct.toFixed(1)}%)</span></td>
+    </tr>`;
+  }).join('');
+  const totPL = totVal - totCost;
+
+  const redeemed = !!p.redeemed;
+  let statusBadge;
+  if (redeemed) statusBadge = `<span class="badge badge-purple">kiváltva</span>`;
+  else if (p.end && p.end < now()) statusBadge = `<span class="badge badge-red">lejárt</span>`;
+  else statusBadge = `<span class="badge badge-green">aktív</span>`;
+
+  return `
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:4px">
+        <div style="font-family:var(--display);font-size:20px;font-weight:700">Zálogjegy: ${p.ticketNo ? escHtml(p.ticketNo) : '—'}</div>
+        ${statusBadge}
+      </div>
+      <div style="color:var(--muted);font-size:12px;margin-bottom:18px">Zálogba adva: ${p.start||'—'} &nbsp;|&nbsp; Lejárat: ${p.end||'—'}</div>
+
+      <div class="grid g4" style="margin-bottom:20px">
+        <div><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:4px">Kölcsön összeg</div><div style="font-family:var(--display);font-size:16px;font-weight:700">${fmt(d.principal)}</div></div>
+        <div><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:4px">Kézhez kapott</div><div class="cyan" style="font-family:var(--display);font-size:16px;font-weight:700">${fmt(d.cashReceived)}</div></div>
+        <div><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:4px">${redeemed?'Kiváltási összeg':'Jelenlegi tartozás'}</div><div class="${redeemed?'purple':'red'}" style="font-family:var(--display);font-size:16px;font-weight:700">${fmt(redeemed ? (p.redeemedAmount||0) : d.currentDebt)}</div></div>
+        <div><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:4px">Kiváltás lejáratkor</div><div style="font-family:var(--display);font-size:16px;font-weight:700">${fmt(d.totalRepay)}</div></div>
+      </div>
+
+      <div style="display:flex;flex-wrap:wrap;gap:20px;font-size:12px;margin-bottom:20px;padding-top:16px;border-top:1px solid var(--border)">
+        <div><span style="color:var(--muted)">Kezelési költség: </span><strong class="red">${d.feePct}% (${fmt(d.fee)})</strong></div>
+        <div><span style="color:var(--muted)">Kamat: </span><strong>${p.rate}% / év</strong></div>
+        <div><span style="color:var(--muted)">Futamidő: </span><strong>${d.termLabel}</strong></div>
+        <div><span style="color:var(--muted)">Eddigi kamat: </span><strong class="yellow">${fmt(d.accrued)}</strong></div>
+        <div><span style="color:var(--muted)">Teljes kamat (lejáratig): </span><strong class="yellow">${fmt(d.totalInterest)}</strong></div>
+        <div><span style="color:var(--muted)">Eltelt: </span><strong>${d.elapsedLabel}</strong></div>
+      </div>
+
+      <div class="card-title" style="margin-bottom:12px">Zálogban lévő aranytételek</div>
+      <div class="scroll-table">
+        <table>
+          <thead><tr><th>Megnevezés</th><th>Kód</th><th>Forma</th><th>Tisztaság</th><th>Tömeg</th><th>Vétel dátuma</th><th>Vételár</th><th>Jelenlegi érték</th><th>P&amp;L</th></tr></thead>
+          <tbody>
+            ${rowsHtml}
+            <tr style="border-top:2px solid var(--border2)">
+              <td colspan="4"><strong>Összesen (${liveCount} tétel)</strong></td>
+              <td><strong>${fmtNum(totGrams)} g</strong></td>
+              <td></td>
+              <td><strong>${fmt(totCost)}</strong></td>
+              <td class="cyan"><strong>${fmt(totVal)}</strong></td>
+              <td class="${totPL>=0?'green':'red'}"><strong>${totPL>=0?'+':''}${fmt(totPL)}</strong></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
 function renderPledges() {
   populatePledgeGoldSelect();
   const container = document.getElementById('pledge-cards');
@@ -1716,9 +1826,12 @@ function renderPledges() {
       <div class="card" style="${redeemed?'opacity:0.7':''}">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
           <div>
-            <div style="font-family:var(--display);font-size:17px;font-weight:700">${goldLabel} ${badge}</div>
-            <div style="color:var(--muted);font-size:11px;margin-top:2px">
-              ${p.ticketNo ? `Zálogjegy sorszám: <strong style="color:var(--text)">${p.ticketNo}</strong> &nbsp;|&nbsp; ` : ''}Zálogba adva: ${p.start||'—'} &nbsp;|&nbsp; Lejárat: ${p.end||'—'} &nbsp;|&nbsp; ${d.termLabel}
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <span class="badge badge-purple" style="font-size:13px;padding:4px 11px;cursor:pointer" onclick="openPledgeDetail('${p.id}')" title="Kattints a zálogban lévő aranyak részletezéséhez" onmouseover="this.style.filter='brightness(1.12)'" onmouseout="this.style.filter=''">${p.ticketNo ? escHtml(p.ticketNo) : '—'} ›</span>
+              ${badge}
+            </div>
+            <div style="color:var(--muted);font-size:11px;margin-top:4px">
+              Zálogba adva: ${p.start||'—'} &nbsp;|&nbsp; Lejárat: ${p.end||'—'} &nbsp;|&nbsp; ${d.termLabel}
             </div>
           </div>
           ${headerBtn}
@@ -1774,6 +1887,16 @@ function renderPledges() {
   feeEl.className = 'stat-value ' + (feeTotal < 0 ? 'red' : 'green');
   const feeSubEl = document.getElementById('pl-sum-fee-sofar');
   if (feeSubEl) feeSubEl.textContent = `Eddig: ${fmt(feeSoFar)}`;
+
+  // Ha épp egy zálog részletnézete nyitva van, frissítsük az adatait
+  if (_openPledgeId) {
+    const dv = document.getElementById('pledge-detail-view');
+    if (dv && dv.style.display !== 'none') {
+      const p = state.pledges.find(x => x.id === _openPledgeId);
+      if (p) { const c = document.getElementById('pledge-detail-content'); if (c) c.innerHTML = buildPledgeDetailHTML(p); }
+      else closePledgeDetail();
+    }
+  }
 }
 
 async function fetchGoldSpotHuf() {
@@ -1794,9 +1917,13 @@ async function fetchGoldPrice() {
   await refreshAllPrices();
 }
 
+function pledgeForGold(goldId) {
+  return (state.pledges||[]).find(pl => !pl.redeemed && (
+    (Array.isArray(pl.goldIds) && pl.goldIds.includes(goldId)) || pl.goldId === goldId)) || null;
+}
+
 function pledgeTicketForGold(goldId) {
-  const p = (state.pledges||[]).find(pl => !pl.redeemed && (
-    (Array.isArray(pl.goldIds) && pl.goldIds.includes(goldId)) || pl.goldId === goldId));
+  const p = pledgeForGold(goldId);
   return p ? (p.ticketNo || '') : '';
 }
 
@@ -2214,7 +2341,7 @@ function renderDashboard() {
     { label: 'Kripto', value: cryptoOpen, color: '#4FA7BD' },
     { label: 'Zálog (−)', value: totalPledge, color: '#8B6690' },
     { label: 'Hitel (−)', value: totalLoan, color: '#C24A3A' },
-  ]);
+  ], { label: 'Nettó vagyon', value: fmtCompact(netWorth) + ' Ft' });
 
   /* ===== Bővített kimutatások ===== */
   const spot = state.goldSpot || 28000;
@@ -2391,11 +2518,13 @@ function renderWatch() {
         const unreal = liveVal!==null ? liveVal-openCost : null;
         const badge = live ? `<span class="badge badge-green">● élő</span>` : '';
         const rows = [
+          ['Mennyiség', fmtNum(openQty) + ' db', ''],
           ['Nyitott pozíció (bekerülési)', fmt(openCost), ''],
         ];
         if (liveVal!==null) {
           rows.push(['Aktuális eladási érték', fmt(liveVal), 'cyan']);
-          rows.push(['Nem realizált P&L', `${unreal>=0?'+':''}${fmt(unreal)}`, unreal>=0?'green':'red']);
+          const unrealPct = openCost ? unreal/openCost*100 : 0;
+          rows.push(['Nem realizált P&L', `${unreal>=0?'+':''}${fmt(unreal)} (${unreal>=0?'+':''}${unrealPct.toFixed(1)}%)`, unreal>=0?'green':'red']);
         }
         return dashTile(coin, badge, rows, '');
       }).join('');
@@ -2422,16 +2551,35 @@ function renderWatch() {
       return agg;
     };
 
-    const goldTile = (a, pledgeBadge) => {
+    const goldTile = (a, pledgeBadge, pledge) => {
       const pl = a.val - a.cost;
-      const title = `${a.name}`;
-      return dashTile(title, pledgeBadge||'', [
-        ['Darab', `${a.count} db (${fmtNum(a.grams)} g/db)`, ''],
-        ['Össztömeg', `${fmtNum(a.totalGrams)} g`, ''],
-        ['Vételár', fmt(a.cost), ''],
-        ['Jelenlegi érték', fmt(a.val), 'cyan'],
-        ['P&L', `${pl>=0?'+':''}${fmt(pl)}`, pl>=0?'green':'red'],
-      ]);
+      const plPct = a.cost ? pl/a.cost*100 : 0;
+      const plStr = `${pl>=0?'+':''}${fmt(pl)} (${pl>=0?'+':''}${plPct.toFixed(1)}%)`;
+      const darab = `${a.count} db${a.grams != null ? ` (${fmtNum(a.grams)} g/db)` : ''}`;
+      let rows;
+      if (pledge) {
+        const fee = pledge.debt - pledge.loan;                 // a kölcsön díja (pozitív)
+        const feePct = pledge.loan ? fee/pledge.loan*100 : 0;
+        rows = [
+          ['Darab', darab, ''],
+          ['Össztömeg', `${fmtNum(a.totalGrams)} g`, ''],
+          ['Vételár', fmt(a.cost), ''],
+          ['Kézhez kapott', fmt(pledge.loan), ''],
+          ['Jelenlegi érték', fmt(a.val), 'cyan'],
+          ['Jelenlegi tartozás', fmt(pledge.debt), 'yellow'],
+          ['P&L', plStr, pl>=0?'green':'red'],
+          ['Kölcsön díja', `${fmt(fee)} (${feePct.toFixed(1)}%)`, 'red'],
+        ];
+      } else {
+        rows = [
+          ['Darab', darab, ''],
+          ['Össztömeg', `${fmtNum(a.totalGrams)} g`, ''],
+          ['Vételár', fmt(a.cost), ''],
+          ['Jelenlegi érték', fmt(a.val), 'cyan'],
+          ['P&L', plStr, pl>=0?'green':'red'],
+        ];
+      }
+      return dashTile(`${a.name}`, pledgeBadge||'', rows);
     };
 
     if (goldBox) {
@@ -2446,20 +2594,35 @@ function renderWatch() {
     if (goldPledgedBox) {
       const pledgedItems = state.goldItems.filter(g => pledgedSet.has(g.id));
       if (pledgedItems.length) {
-        // zálogjegyenként aggregálunk, hogy a csempén a helyes sorszám legyen
-        const agg = {};
+        // ZÁLOGJEGYENKÉNT csoportosítunk (nem arany-tömeg szerint):
+        // egy zálog = egy csempe, benne a záloghoz tartozó összes arany összegezve.
+        const byPledge = {};
         pledgedItems.forEach(g => {
-          const ticket = pledgeTicketForGold(g.id) || '—';
-          const k = `${g.name}|${g.grams}|${g.purity}|${g.form}|${ticket}`;
-          if (!agg[k]) agg[k] = { name:g.name, grams:g.grams, count:0, totalGrams:0, cost:0, val:0, ticket };
-          agg[k].count++;
-          agg[k].totalGrams += g.grams;
-          agg[k].cost += g.cost;
-          agg[k].val += goldItemValue(g, spot);
+          const p = pledgeForGold(g.id);
+          const key = p ? p.id : ('none_' + g.id);
+          if (!byPledge[key]) byPledge[key] = { pledge:p, names:new Set(), gramsSet:new Set(), count:0, totalGrams:0, cost:0, val:0 };
+          const grp = byPledge[key];
+          grp.names.add(g.name);
+          grp.gramsSet.add(g.grams);
+          grp.count++;
+          grp.totalGrams += g.grams;
+          grp.cost += g.cost;
+          grp.val += goldItemValue(g, spot);
         });
-        goldPledgedBox.innerHTML = Object.values(agg).map(a =>
-          goldTile(a, `<span class="badge badge-purple">${escHtml(a.ticket)}</span>` + (goldLiveBadge ? ' ' + goldLiveBadge : ''))
-        ).join('');
+        goldPledgedBox.innerHTML = Object.values(byPledge).map(grp => {
+          const ticket = (grp.pledge && grp.pledge.ticketNo) ? grp.pledge.ticketNo : '—';
+          const a = {
+            name: '',
+            count: grp.count,
+            grams: (grp.gramsSet.size === 1) ? [...grp.gramsSet][0] : null,
+            totalGrams: grp.totalGrams,
+            cost: grp.cost,
+            val: grp.val,
+          };
+          let pledgeInfo = null;
+          if (grp.pledge) { const d = calcPledgeDebt(grp.pledge); pledgeInfo = { loan: d.cashReceived, debt: d.currentDebt }; }
+          return goldTile(a, `<span class="badge badge-purple">${escHtml(ticket)}</span>` + (goldLiveBadge ? ' ' + goldLiveBadge : ''), pledgeInfo);
+        }).join('');
       } else {
         goldPledgedBox.innerHTML = emptyTile('Nincs zálogban lévő aranytétel');
       }
@@ -2469,14 +2632,16 @@ function renderWatch() {
 
 function dashTile(title, badgeHtml, rows, footer) {
   return `<div class="card" style="padding:14px;display:flex;flex-direction:column;justify-content:space-between">
-    <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-wrap:wrap">
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap">
       <span style="font-family:var(--display);font-weight:700;font-size:15px;line-height:1.2">${title}</span>
       ${badgeHtml||''}
     </div>
-    <div style="flex:1">
+    <div style="flex:1;display:grid;grid-template-columns:1fr 1fr;gap:7px 12px;align-content:start">
     ${rows.map(r=>`
-      <div style="font-size:10px;color:var(--muted);margin-top:7px;text-transform:uppercase;letter-spacing:0.4px">${r[0]}</div>
-      <div class="${r[2]||''}" style="font-weight:700;font-size:16px;line-height:1.2;font-variant-numeric:tabular-nums">${r[1]}</div>
+      <div style="min-width:0">
+        <div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:0.3px;line-height:1.25">${r[0]}</div>
+        <div class="${r[2]||''}" style="font-weight:700;font-size:13px;line-height:1.25;font-variant-numeric:tabular-nums">${r[1]}</div>
+      </div>
     `).join('')}
     </div>
     ${footer ? `<div style="font-size:10px;color:var(--muted);margin-top:10px;padding-top:8px;border-top:1px solid var(--surface3)">${footer}</div>` : ''}
@@ -2487,44 +2652,126 @@ function emptyTile(msg) {
   return `<div class="card" style="color:var(--muted);text-align:center;padding:24px;grid-column:1/-1">${msg}</div>`;
 }
 
-function drawDonut(segments) {
+let _donutSegments = [], _donutTotal = 0, _donutCenter = null;
+
+function _cssVar(name, fallback) {
+  const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return v || fallback;
+}
+
+/* Rövid, kompakt pénzformátum a donut közepére (1,35 M Ft) */
+function fmtCompact(n) {
+  const a = Math.abs(n), sign = n < 0 ? '−' : '';
+  if (a >= 1e9) return sign + (a/1e9).toFixed(2).replace('.', ',') + ' Mrd';
+  if (a >= 1e6) return sign + (a/1e6).toFixed(2).replace('.', ',') + ' M';
+  if (a >= 1e3) return sign + Math.round(a/1e3) + ' e';
+  return sign + Math.round(a);
+}
+
+function drawDonut(segments, center) {
+  _donutSegments = segments || [];
+  _donutTotal = _donutSegments.reduce((a,s)=>a+s.value, 0);
+  _donutCenter = center || null;
+  renderDonutCanvas(-1);
+  renderDonutLegend();
+}
+
+function renderDonutCanvas(hi) {
   const canvas = document.getElementById('donut-canvas');
+  if (!canvas) return;
+  const size = 190;
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = size * dpr;
+  canvas.height = size * dpr;
+  canvas.style.width = size + 'px';
+  canvas.style.height = size + 'px';
   const ctx = canvas.getContext('2d');
-  const total = segments.reduce((a,s)=>a+s.value,0);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, size, size);
+
+  const cx = size/2, cy = size/2, r = 70, lw = 22;
+
+  // háttér-gyűrű (track)
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI*2);
+  ctx.lineWidth = lw;
+  ctx.strokeStyle = _cssVar('--surface2', 'rgba(0,0,0,0.06)');
+  ctx.stroke();
+
+  const total = _donutTotal;
+  if (total > 0) {
+    const gap = 0.045; // rés a szeletek közt (radián)
+    let angle = -Math.PI/2;
+    _donutSegments.forEach((s, i) => {
+      const slice = (s.value/total) * Math.PI*2;
+      if (slice <= 0) return;
+      const start = angle + gap/2;
+      const end = angle + slice - gap/2;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, start, Math.max(start + 0.001, end));
+      ctx.lineWidth = (hi === i) ? lw + 5 : lw;
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = s.color;
+      ctx.globalAlpha = (hi === -1 || hi === i) ? 1 : 0.25;
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+      angle += slice;
+    });
+  }
+
+  // közép-felirat
+  let big = '', small = '';
+  if (hi >= 0 && _donutSegments[hi]) {
+    big = total ? (_donutSegments[hi].value/total*100).toFixed(1) + '%' : '0%';
+    small = _donutSegments[hi].label;
+  } else if (_donutCenter) {
+    big = _donutCenter.value;
+    small = _donutCenter.label;
+  } else if (!total) {
+    small = 'Nincs adat';
+  }
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  if (big) {
+    ctx.fillStyle = (hi >= 0 && _donutSegments[hi]) ? _donutSegments[hi].color : _cssVar('--text', '#17171A');
+    ctx.font = '700 17px "Hanken Grotesk", system-ui, sans-serif';
+    ctx.fillText(big, cx, cy - (small ? 8 : 0));
+  }
+  if (small) {
+    ctx.fillStyle = _cssVar('--muted', '#666');
+    ctx.font = '600 9px "Space Mono", ui-monospace, monospace';
+    ctx.fillText(small.toUpperCase(), cx, cy + (big ? 12 : 0));
+  }
+}
+
+function renderDonutLegend() {
+  const legend = document.getElementById('donut-legend');
+  if (!legend) return;
+  const total = _donutTotal;
   if (!total) {
-    ctx.clearRect(0,0,140,140);
-    document.getElementById('donut-legend').innerHTML = '<div style="color:var(--muted);font-size:12px">Nincs adat</div>';
+    legend.innerHTML = '<div style="color:var(--muted);font-size:12px">Nincs adat</div>';
     return;
   }
-  ctx.clearRect(0,0,140,140);
-  let angle = -Math.PI/2;
-  const cx=70, cy=70, r=55, inner=32;
-  segments.forEach(s => {
-    const slice = (s.value/total)*Math.PI*2;
-    ctx.beginPath();
-    ctx.moveTo(cx,cy);
-    ctx.arc(cx,cy,r,angle,angle+slice);
-    ctx.closePath();
-    ctx.fillStyle = s.color;
-    ctx.fill();
-    angle += slice;
-  });
-  ctx.beginPath();
-  ctx.arc(cx,cy,inner,0,Math.PI*2);
-  ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--surface').trim() || '#16201a';
-  ctx.fill();
-
-  const legend = document.getElementById('donut-legend');
-  legend.innerHTML = segments.map(s => {
-    const pct = total ? (s.value/total*100) : 0;
+  legend.innerHTML = _donutSegments.map((s, i) => {
+    const pct = s.value/total*100;
     return `
-    <div class="legend-item">
-      <span style="color:${s.color};font-weight:800;font-size:13.5px;min-width:42px;flex-shrink:0;letter-spacing:-0.3px">${pct.toFixed(1)}%</span>
+    <div class="legend-item" onmouseenter="donutHover(${i})" onmouseleave="donutHover(-1)"
+      style="cursor:default;border-radius:7px;padding:3px 6px;margin:0 -6px;transition:background .12s,opacity .12s">
+      <span style="color:${s.color};font-weight:800;font-size:13px;min-width:44px;flex-shrink:0;letter-spacing:-0.3px">${pct.toFixed(1)}%</span>
       <span style="color:var(--muted)">${s.label}</span>
       <span style="margin-left:auto;font-weight:600">${fmt(s.value)}</span>
-    </div>
-  `;
+    </div>`;
   }).join('');
+}
+
+function donutHover(i) {
+  renderDonutCanvas(i);
+  const legend = document.getElementById('donut-legend');
+  if (!legend) return;
+  Array.from(legend.children).forEach((el, idx) => {
+    el.style.opacity = (i === -1 || i === idx) ? '1' : '0.4';
+    el.style.background = (i === idx) ? 'var(--surface2)' : 'transparent';
+  });
 }
 
 function renderAll() {

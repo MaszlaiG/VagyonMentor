@@ -77,7 +77,7 @@
     </div>
   </div>
 
-  <div class="grid g2" style="margin-bottom:16px">
+  <div class="dash-span-grid">
     <div class="card card-stat-dark" id="d-unreal-card">
       <div class="card-title">Nem Realizált P&amp;L</div>
       <div class="stat-value" id="d-unreal-pl">0 Ft</div>
@@ -88,9 +88,6 @@
       <div class="stat-value red" id="d-total-liab">0 Ft</div>
       <div class="stat-sub" id="d-total-liab-sub"></div>
     </div>
-  </div>
-
-  <div class="grid g3" style="margin-bottom:24px">
     <div class="card">
       <div class="card-title">Közelgő Kiadások</div>
       <div id="quick-status" class="scroll-y-fade" style="max-height:260px;overflow-y:auto"></div>
@@ -99,7 +96,7 @@
       <div class="card-title" style="color:var(--accent3)">Havi Kiadás</div>
       <div id="dash-monthly"></div>
     </div>
-    <div class="card">
+    <div class="card dash-donut-span">
       <div class="card-title">Vagyonmegoszlás</div>
       <div class="donut-wrap">
         <canvas id="donut-canvas" width="140" height="140"></canvas>
@@ -508,31 +505,40 @@
 <div class="tab-content" id="tab-pledge">
   <div class="section-header">
     <div class="section-title">Zálog (arany fedezetű kölcsön)</div>
-    <button class="btn" onclick="openModal('pledge-modal')">+ Zálogba adás</button>
+    <button class="btn" id="pledge-add-btn" onclick="openModal('pledge-modal')">+ Zálogba adás</button>
   </div>
 
   <div>
     <div>
-      <div class="grid g4" style="margin-bottom:16px">
-        <div class="card card-stat-cyan">
-          <div class="card-title">Kézhez kapott</div>
-          <div class="stat-value cyan" id="pl-sum-cash">0 Ft</div>
+      <div id="pledge-list-view">
+        <div class="grid g4" style="margin-bottom:16px">
+          <div class="card card-stat-cyan">
+            <div class="card-title">Kézhez kapott</div>
+            <div class="stat-value cyan" id="pl-sum-cash">0 Ft</div>
+          </div>
+          <div class="card card-stat-red">
+            <div class="card-title">Jelenlegi tartozás</div>
+            <div class="stat-value red" id="pl-sum-debt">0 Ft</div>
+          </div>
+          <div class="card card-stat-yellow">
+            <div class="card-title">Visszafizetendő lejáratkor</div>
+            <div class="stat-value yellow" id="pl-sum-repay">0 Ft</div>
+          </div>
+          <div class="card card-stat-dark">
+            <div class="card-title">Zálog díja</div>
+            <div class="stat-value red" id="pl-sum-fee">0 Ft</div>
+            <div class="stat-sub" id="pl-sum-fee-sofar"></div>
+          </div>
         </div>
-        <div class="card card-stat-red">
-          <div class="card-title">Jelenlegi tartozás</div>
-          <div class="stat-value red" id="pl-sum-debt">0 Ft</div>
-        </div>
-        <div class="card card-stat-yellow">
-          <div class="card-title">Visszafizetendő lejáratkor</div>
-          <div class="stat-value yellow" id="pl-sum-repay">0 Ft</div>
-        </div>
-        <div class="card card-stat-dark">
-          <div class="card-title">Zálog díja</div>
-          <div class="stat-value red" id="pl-sum-fee">0 Ft</div>
-          <div class="stat-sub" id="pl-sum-fee-sofar"></div>
-        </div>
+        <div id="pledge-cards" style="display:grid;gap:16px"></div>
       </div>
-      <div id="pledge-cards" style="display:grid;gap:16px"></div>
+
+      <div id="pledge-detail-view" style="display:none">
+        <div style="margin-bottom:16px">
+          <button class="btn btn-secondary" onclick="closePledgeDetail()">← Vissza a zálogokhoz</button>
+        </div>
+        <div id="pledge-detail-content"></div>
+      </div>
     </div>
 
       <div class="modal" id="pledge-modal" onclick="if(event.target===this)closeModal('pledge-modal')">
@@ -590,7 +596,7 @@
 <div class="tab-content" id="tab-loan">
   <div class="section-header">
     <div class="section-title">Hitel Nyilvántartás</div>
-    <button class="btn" onclick="openModal('loan-modal')">+ Hitel rögzítése</button>
+    <button class="btn" id="loan-add-btn" onclick="openModal('loan-modal')">+ Hitel rögzítése</button>
   </div>
 
   <div>

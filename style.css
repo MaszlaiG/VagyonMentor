@@ -237,6 +237,26 @@ main { padding: 24px 32px 48px; max-width: 1400px; }
 .g12 { grid-template-columns: 1fr 2fr; }
 .g21 { grid-template-columns: 2fr 1fr; }
 
+/* Áttekintő középső blokk: bal 2 oszlop 2×2 kártya, jobb oszlopban a
+   Vagyonmegoszlás 2 sor magasan átnyúlva. */
+.dash-span-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.dash-donut-span { grid-column: 3; grid-row: 1 / span 2; }
+/* A magas Vagyonmegoszlás kártyán a kördiagram fent, az adatok alatta */
+.dash-donut-span .donut-wrap { flex-direction: column; align-items: center; gap: 18px; }
+.dash-donut-span .donut-legend { width: 100%; }
+@media (max-width: 1024px) {
+  .dash-span-grid { grid-template-columns: 1fr 1fr; }
+  .dash-donut-span { grid-column: auto; grid-row: auto; }
+}
+@media (max-width: 680px) {
+  .dash-span-grid { grid-template-columns: 1fr; }
+}
+
 .card {
   background: var(--surface);
   border: 1px solid var(--border);
