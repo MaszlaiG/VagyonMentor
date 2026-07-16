@@ -700,13 +700,23 @@ async function addStock() {
   const divMonths = document.getElementById('st-divmonths').value;
   const buyDate = document.getElementById('st-date').value || now();
   if (!ticker || !qty) return;
+  const noDiv = (divType === 'none');
   const fxRate = await fxRateForDate(currency, buyDate);
   const avg = avgNative * fxRate;
   const price = avg; // kezdő érték; az élő frissítés felülírja
-  state.stocks.push({ id:uid(), ticker, name, qty, avg, avgNative, price, divYield, divType, divFreq, divMonths, currency, buyDate });
+  state.stocks.push({
+    id:uid(), ticker, name, qty, avg, avgNative, price,
+    divYield: noDiv ? 0 : divYield,
+    divType,
+    divFreq: noDiv ? '' : divFreq,
+    divMonths: noDiv ? '' : divMonths,
+    currency, buyDate
+  });
   save();
   ['st-ticker','st-name','st-qty','st-avg','st-div'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('st-date').value = now();
+  const dtSel = document.getElementById('st-divtype'); if (dtSel) dtSel.value = 'cash';
+  updateStockDivType();
   closeModal('stock-modal');
   renderAll();
 }
@@ -799,13 +809,21 @@ function stockDivYield(s, currentPrice) {
 
 /* Régi (típus nélküli) tételeket kifizetőnek tekintjük. A visszaforgató
    (acc) részvény nem fizet készpénz-osztalékot, így nem adóztatjuk. */
-function stockIsCash(s) { return (s.divType || 'cash') !== 'acc'; }
+function stockIsCash(s) { return (s.divType || 'cash') === 'cash'; }
+function stockPaysNoDiv(s) { return s.divType === 'none'; }
+function stockTypeShort(s) {
+  const t = s.divType || 'cash';
+  if (t === 'cash') return 'Dist';
+  if (t === 'acc') return 'Acc';
+  return '—';
+}
 
 const DIV_MONTHS_SET = { '1': [1,4,7,10], '2': [2,5,8,11], '3': [3,6,9,12] };
 const MONTH_ABBR = ['', 'Jan','Feb','Már','Ápr','Máj','Jún','Júl','Aug','Szep','Okt','Nov','Dec'];
 
 function stockDivFreqLabel(s) {
-  if (!stockIsCash(s)) return 'Visszaforgató';
+  if (stockPaysNoDiv(s)) return 'Nem fizet osztalékot';
+  if (!stockIsCash(s)) return 'Visszaforgató (akkumulációs)';
   const f = s.divFreq || 'yearly';
   if (f === 'monthly') return 'Havonta';
   if (f === 'quarterly') {
@@ -829,6 +847,24 @@ function updateStockDivMonths() {
   const freq = document.getElementById('st-divfreq');
   const wrap = document.getElementById('st-divmonths-wrap');
   if (freq && wrap) wrap.style.display = (freq.value === 'quarterly') ? '' : 'none';
+}
+
+/* Ha a részvény nem fizet osztalékot, a hozam/gyakoriság mezők eltűnnek */
+function updateStockDivType() {
+  const type = (document.getElementById('st-divtype') || {}).value;
+  const isNone = (type === 'none');
+  const divWrap  = document.getElementById('st-div-wrap');
+  const freqWrap = document.getElementById('st-divfreq-wrap');
+  const monWrap  = document.getElementById('st-divmonths-wrap');
+  if (divWrap)  divWrap.style.display  = isNone ? 'none' : '';
+  if (freqWrap) freqWrap.style.display = isNone ? 'none' : '';
+  if (isNone) {
+    if (monWrap) monWrap.style.display = 'none';
+    const divInput = document.getElementById('st-div');
+    if (divInput) divInput.value = '';
+  } else {
+    updateStockDivMonths();
+  }
 }
 
 function renderStocks() {
@@ -879,7 +915,7 @@ function renderStocks() {
           <strong>${s.ticker}</strong>
           ${s.name ? `<div style="font-size:10px;color:var(--muted)">${escHtml(s.name)}</div>` : ''}
         </td>
-        <td><span class="badge ${stockIsCash(s)?'badge-green':'badge-gray'}" title="${stockDivFreqLabel(s)}">${stockIsCash(s)?'Dist':'Acc'}</span></td>
+        <td><span class="badge ${stockIsCash(s)?'badge-green':'badge-gray'}" title="${stockDivFreqLabel(s)}">${stockTypeShort(s)}</span></td>
         <td style="color:var(--muted)">${s.buyDate||'—'}</td>
         <td>${fmtNum(s.qty)}</td>
         <td>${fmtCur(avgN, cur)}</td>
