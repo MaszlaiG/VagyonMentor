@@ -1092,6 +1092,75 @@ function renderCrypto() {
       </tr>`;
     }).join('') || '<tr><td colspan="9" style="color:var(--muted);text-align:center;padding:20px">Nincs kriptó pozíció</td></tr>';
   }
+
+  // Hozam — a nyitott pozíció megtérülése
+  const unrealPct = totalOpen > 0 ? (totalLiveOpen - totalOpen) / totalOpen * 100 : 0;
+  const yEl = document.getElementById('cr-yield');
+  if (yEl) {
+    if (totalOpen > 0) {
+      yEl.textContent = (unrealPct>=0?'+':'') + unrealPct.toFixed(1) + '%';
+      yEl.className = 'stat-value ' + (unrealPct>=0?'green':'red');
+      const yc = document.getElementById('cr-yield-card');
+      if (yc) yc.className = 'card ' + (unrealPct>=0?'card-stat-green':'card-stat-red');
+    } else {
+      yEl.textContent = '—';
+      yEl.className = 'stat-value';
+    }
+  }
+
+  // Per-coin HUF adatok (megoszlás + statisztika)
+  const coinStats = [];
+  Object.entries(coins).forEach(([coin, c]) => {
+    const openQty = c.buys.reduce((a,b)=>a+b.qty,0);
+    if (openQty <= 0) return;
+    const openCost = c.buys.reduce((a,b)=>a+b.qty*b.price,0);
+    const live = getLivePrice(coin);
+    const curVal = live ? openQty*live : openCost;
+    const pl = curVal - openCost;
+    const plPct = openCost ? pl/openCost*100 : 0;
+    coinStats.push({ coin, curVal, openCost, pl, plPct });
+  });
+
+  // Kripto megoszlás (sávok, HUF alapon)
+  const allocEl = document.getElementById('crypto-allocation');
+  if (allocEl) {
+    const totalVal = coinStats.reduce((a,s)=>a+s.curVal, 0);
+    if (!coinStats.length || totalVal <= 0) {
+      allocEl.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:10px 0">Nincs nyitott pozíció</div>';
+    } else {
+      const palette = ['#C08A2E','#3FA36C','#4FA7BD','#8B6690','#C24A3A','#B8873A','#6E8B3D','#B0703A'];
+      allocEl.innerHTML = [...coinStats].sort((a,b)=>b.curVal-a.curVal).map((s,i)=>{
+        const color = palette[i % palette.length];
+        const share = s.curVal/totalVal*100;
+        return `<div style="margin-bottom:11px">
+          <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;margin-bottom:4px">
+            <span><strong style="color:${color}">${s.coin}</strong> <span style="color:var(--muted)">${share.toFixed(1)}%</span></span>
+            <span class="cyan" style="font-weight:600">${fmt(s.curVal)}</span>
+          </div>
+          <div class="progress-bar" style="height:6px"><div class="progress-fill" style="width:${share}%;background:${color}"></div></div>
+        </div>`;
+      }).join('');
+    }
+  }
+
+  // Statisztika
+  const statsEl = document.getElementById('crypto-stats');
+  if (statsEl) {
+    if (!coinStats.length) {
+      statsEl.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:10px 0">Nincs nyitott pozíció</div>';
+    } else {
+      let best = coinStats[0], worst = coinStats[0];
+      coinStats.forEach(s => { if (s.plPct > best.plPct) best = s; if (s.plPct < worst.plPct) worst = s; });
+      const avgPct = coinStats.reduce((a,s)=>a+s.plPct, 0) / coinStats.length;
+      const perfCell = s => `${s.coin} <span class="${s.plPct>=0?'green':'red'}">${s.plPct>=0?'+':''}${s.plPct.toFixed(1)}%</span>`;
+      statsEl.innerHTML = `
+        <div class="tax-row"><span style="color:var(--muted)">Coinok száma</span><span>${coinStats.length} db</span></div>
+        <div class="tax-row"><span style="color:var(--muted)">Legjobb teljesítő</span><span>${perfCell(best)}</span></div>
+        <div class="tax-row"><span style="color:var(--muted)">Leggyengébb teljesítő</span><span>${perfCell(worst)}</span></div>
+        <div class="tax-row"><span style="color:var(--muted)">Átlagos hozam</span><span class="${avgPct>=0?'green':'red'}">${avgPct>=0?'+':''}${avgPct.toFixed(1)}%</span></div>
+      `;
+    }
+  }
 }
 
 function calcLoanEndDate() {
