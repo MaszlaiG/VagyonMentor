@@ -498,6 +498,28 @@ async function fetchStockPriceHuf(ticker, currency) {
 
 let refreshing = false;
 
+/* Yahoo osztaléktörténet → gördülő 12 havi osztalék/részvény (natív deviza).
+   Az utolsó 365 nap kifizetéseit összegzi; ha van, ez a trailing éves osztalék. */
+async function fetchStockAnnualDividend(ticker) {
+  try {
+    const hosts = ['query1.finance.yahoo.com', 'query2.finance.yahoo.com'];
+    for (const host of hosts) {
+      const url = `https://${host}/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=1y&events=div&_=${Date.now()}`;
+      const data = await fetchJsonViaProxies(url);
+      const divs = data?.chart?.result?.[0]?.events?.dividends;
+      if (divs) {
+        const cutoff = Date.now()/1000 - 365*24*3600;
+        let sum = 0, count = 0;
+        Object.values(divs).forEach(d => {
+          if (d && typeof d.amount === 'number' && d.date >= cutoff) { sum += d.amount; count++; }
+        });
+        if (count > 0) return sum;
+      }
+    }
+    return null;
+  } catch(e) { return null; }
+}
+
 async function refreshAllPrices() {
   if (refreshing) return;
   refreshing = true;
@@ -522,6 +544,11 @@ async function refreshAllPrices() {
       s.price = price;
     } else if (!failedTickers.includes(ticker)) {
       failedTickers.push(ticker);
+    }
+    // Osztalék automatikus követése (csak ha be van kapcsolva és osztalékfizető)
+    if (s.divAuto && (s.divType || 'cash') === 'cash') {
+      const annualDiv = await fetchStockAnnualDividend(s.ticker);
+      if (annualDiv != null) s.divAnnualNative = annualDiv;
     }
   }
 
@@ -688,37 +715,66 @@ async function fxRateForDate(currency, dateStr) {
   return currency === 'USD' ? h.usd : h.eur;
 }
 
+async function resolveTicker(query) {
+  const q = (query || '').trim();
+  if (!q) return null;
+  try {
+    const hosts = ['query1.finance.yahoo.com', 'query2.finance.yahoo.com'];
+    for (const host of hosts) {
+      const url = `https://${host}/v1/finance/search?q=${encodeURIComponent(q)}&quotesCount=6&newsCount=0&_=${Date.now()}`;
+      const data = await fetchJsonViaProxies(url);
+      const quotes = (data && data.quotes) || [];
+      const best = quotes.find(x => x.symbol && (x.quoteType === 'EQUITY' || x.quoteType === 'ETF'))
+                || quotes.find(x => x.symbol);
+      if (best && best.symbol) return { symbol: best.symbol.toUpperCase(), name: best.longname || best.shortname || q };
+    }
+    return null;
+  } catch(e) { return null; }
+}
+
 async function addStock() {
-  const ticker = document.getElementById('st-ticker').value.trim().toUpperCase();
-  const name = (document.getElementById('st-name').value || '').trim();
+  const ticker = (document.getElementById('st-name').value || '').trim().toUpperCase();
   const qty = parseFloat(document.getElementById('st-qty').value)||0;
   const currency = document.getElementById('st-currency').value;
   const avgNative = parseFloat(document.getElementById('st-avg').value)||0;
-  const divYield = parseFloat(document.getElementById('st-div').value)||0;
-  const divType = document.getElementById('st-divtype').value;
-  const divFreq = document.getElementById('st-divfreq').value;
-  const divMonths = document.getElementById('st-divmonths').value;
   const buyDate = document.getElementById('st-date').value || now();
-  if (!ticker || !qty) return;
-  const noDiv = (divType === 'none');
+  const msg = document.getElementById('st-add-msg');
+  const btn = document.getElementById('st-add-btn');
+  const setMsg = (t, c) => { if (msg) { msg.textContent = t; msg.style.color = c || 'var(--muted)'; } };
+
+  if (!ticker || !qty || !avgNative) { setMsg('Adj meg tickert, darabszámot és vételi árat.', 'var(--red)'); return; }
+
+  if (btn) btn.disabled = true;
+  setMsg('Adatok lekérése…');
+
+  // Best-effort teljes név a tickerhez (nem kötelező)
+  let name = '';
+  try { const r = await resolveTicker(ticker); if (r && r.name) name = r.name; } catch(e) {}
+
   const fxRate = await fxRateForDate(currency, buyDate);
   const avg = avgNative * fxRate;
-  const price = avg; // kezdő érték; az élő frissítés felülírja
   state.stocks.push({
-    id:uid(), ticker, name, qty, avg, avgNative, price,
-    divYield: noDiv ? 0 : divYield,
-    divType,
-    divFreq: noDiv ? '' : divFreq,
-    divMonths: noDiv ? '' : divMonths,
+    id: uid(),
+    ticker,
+    name,
+    qty, avg, avgNative,
+    price: avg,             // kezdő érték; az élő frissítés felülírja
+    divYield: null,
+    divType: 'cash',        // osztalék automatikus felismerése (0, ha nem fizet)
+    divAuto: true,
     currency, buyDate
   });
   save();
-  ['st-ticker','st-name','st-qty','st-avg','st-div'].forEach(id=>document.getElementById(id).value='');
+
+  document.getElementById('st-name').value = '';
+  document.getElementById('st-qty').value = '';
+  document.getElementById('st-avg').value = '';
   document.getElementById('st-date').value = now();
-  const dtSel = document.getElementById('st-divtype'); if (dtSel) dtSel.value = 'none';
-  updateStockDivType();
+  setMsg('');
+  if (btn) btn.disabled = false;
   closeModal('stock-modal');
   renderAll();
+  refreshAllPrices();     // azonnal lehúzza az árat és az osztalékot az új tételhez
 }
 
 function deleteStock(id) {
@@ -803,6 +859,11 @@ function deleteStockFromSale() {
 // Új adat: s.divYield (%). Régi adat: s.div (Ft/részvény) -> hozammá számolva.
 
 function stockDivYield(s, currentPrice) {
+  // Automatikus követés: a Yahoo-ról behúzott gördülő éves osztalék (natív) alapján
+  if (s.divAuto && s.divAnnualNative != null && currentPrice) {
+    const rate = rateForCurrency(s.currency || 'HUF');
+    return s.divAnnualNative * rate / currentPrice * 100;
+  }
   if (s.divYield != null) return s.divYield;
   return (s.div && currentPrice) ? (s.div / currentPrice * 100) : 0;
 }
@@ -812,6 +873,10 @@ function stockDivYield(s, currentPrice) {
 function stockIsCash(s) { return (s.divType || 'cash') === 'cash'; }
 function stockPaysNoDiv(s) { return s.divType === 'none'; }
 function stockTypeShort(s) {
+  if (s.divAuto) {
+    const y = stockDivYield(s, getLivePrice(s.ticker) || s.price);
+    return y > 0 ? 'Dist' : '—';
+  }
   const t = s.divType || 'cash';
   if (t === 'cash') return 'Dist';
   if (t === 'acc') return 'Acc';
@@ -822,6 +887,7 @@ const DIV_MONTHS_SET = { '1': [1,4,7,10], '2': [2,5,8,11], '3': [3,6,9,12] };
 const MONTH_ABBR = ['', 'Jan','Feb','Már','Ápr','Máj','Jún','Júl','Aug','Szep','Okt','Nov','Dec'];
 
 function stockDivFreqLabel(s) {
+  if (s.divAuto) return 'Osztalék automatikusan követve (Yahoo)';
   if (stockPaysNoDiv(s)) return 'Nem fizet osztalékot';
   if (!stockIsCash(s)) return 'Visszaforgató (akkumulációs)';
   const f = s.divFreq || 'yearly';
@@ -853,11 +919,14 @@ function updateStockDivMonths() {
 function updateStockDivType() {
   const type = (document.getElementById('st-divtype') || {}).value;
   const isNone = (type === 'none');
+  const isCash = (type === 'cash');
   const divWrap  = document.getElementById('st-div-wrap');
   const freqWrap = document.getElementById('st-divfreq-wrap');
   const monWrap  = document.getElementById('st-divmonths-wrap');
+  const autoWrap = document.getElementById('st-divauto-wrap');
   if (divWrap)  divWrap.style.display  = isNone ? 'none' : '';
   if (freqWrap) freqWrap.style.display = isNone ? 'none' : '';
+  if (autoWrap) autoWrap.style.display = isCash ? '' : 'none';
   if (isNone) {
     if (monWrap) monWrap.style.display = 'none';
     const divInput = document.getElementById('st-div');
@@ -873,7 +942,7 @@ function renderStocks() {
   document.getElementById('stock-refresh-bar').innerHTML = '';
 
   if (!state.stocks.length) {
-    tbody.innerHTML = '<tr><td colspan="12" style="color:var(--muted);text-align:center;padding:20px">Nincs részvény</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="11" style="color:var(--muted);text-align:center;padding:20px">Nincs részvény</td></tr>';
     document.getElementById('st-sum-invested').textContent = fmt(0);
     document.getElementById('st-sum-current').textContent = fmt(0);
     const plEl0 = document.getElementById('st-sum-pl');
@@ -884,48 +953,58 @@ function renderStocks() {
     return;
   }
 
+  // Csoportosítás tickerenként (több vétel egy sorba, átlagos vételár)
+  const groups = {};
+  state.stocks.forEach(s => { (groups[s.ticker] = groups[s.ticker] || []).push(s); });
+
   let totalInvested=0, totalCurrent=0, totalDiv=0;
-  const rows = [...state.stocks].sort((a,b) => (b.buyDate||'').localeCompare(a.buyDate||''));
-  tbody.innerHTML = rows.map(s => {
-    const cur = s.currency || 'HUF';
+  const groupArr = Object.entries(groups).map(([ticker, lots]) => {
+    const first = lots[0];
+    const cur = first.currency || 'HUF';
     const rate = rateForCurrency(cur);
-    const livePrice = getLivePrice(s.ticker);
-    const currentPriceHuf = livePrice || s.price;
+    const currentPriceHuf = getLivePrice(ticker) || first.price;
 
-    // HUF értékek az összesítőkhöz (devizák összegezhetők)
-    const investedHuf = s.qty * s.avg;
-    const currentHuf = s.qty * currentPriceHuf;
-    const divYield = stockDivYield(s, currentPriceHuf);
-    totalInvested += investedHuf;
+    let qty=0, invHuf=0, invN=0;
+    lots.forEach(l => {
+      qty += l.qty;
+      invHuf += l.qty * l.avg;
+      const avgN = (l.avgNative != null) ? l.avgNative : (rate ? l.avg/rate : l.avg);
+      invN += l.qty * avgN;
+    });
+    const currentHuf = qty * currentPriceHuf;
+    const divYield = stockDivYield(first, currentPriceHuf);
+    totalInvested += invHuf;
     totalCurrent += currentHuf;
-    totalDiv += stockIsCash(s) ? currentHuf * divYield / 100 : 0;
+    totalDiv += stockIsCash(first) ? currentHuf * divYield / 100 : 0;
 
-    // Natív értékek a sorhoz
-    const avgN = (s.avgNative != null) ? s.avgNative : (rate ? s.avg / rate : s.avg);
-    const curPriceN = rate ? currentPriceHuf / rate : currentPriceHuf;
-    const investedN = s.qty * avgN;
-    const currentN = s.qty * curPriceN;
-    const plN = currentN - investedN;
-    const plPct = investedN ? (plN/investedN*100) : 0;
-    const annualDivN = stockIsCash(s) ? currentN * divYield / 100 : 0;
+    const avgN = qty ? invN/qty : 0;
+    const curPriceN = rate ? currentPriceHuf/rate : currentPriceHuf;
+    const currentN = qty * curPriceN;
+    const plN = currentN - invN;
+    const plPct = invN ? plN/invN*100 : 0;
+    const annualDivN = stockIsCash(first) ? currentN * divYield / 100 : 0;
+    return { ticker, first, lots, cur, qty, avgN, curPriceN, investedN: invN, currentN, plN, plPct, annualDivN, divYield, currentHuf };
+  }).sort((a,b) => b.currentHuf - a.currentHuf);
 
+  tbody.innerHTML = groupArr.map(g => {
+    const s = g.first;
     return `
-      <tr>
+      <tr style="cursor:pointer" onclick="openStockDetail('${g.ticker}')">
         <td>
-          <strong>${s.ticker}</strong>
+          <strong>${g.ticker}</strong>
           ${s.name ? `<div style="font-size:10px;color:var(--muted)">${escHtml(s.name)}</div>` : ''}
+          <div style="font-size:10px;color:var(--muted);margin-top:2px">${g.lots.length} vétel ›</div>
         </td>
-        <td><span class="badge ${stockIsCash(s)?'badge-green':'badge-gray'}" title="${stockDivFreqLabel(s)}">${stockTypeShort(s)}</span></td>
-        <td style="color:var(--muted)">${s.buyDate||'—'}</td>
-        <td>${fmtNum(s.qty)}</td>
-        <td>${fmtCur(avgN, cur)}</td>
-        <td>${fmtCur(curPriceN, cur)}</td>
-        <td>${fmtCur(investedN, cur)}</td>
-        <td><strong>${fmtCur(currentN, cur)}</strong></td>
-        <td class="${plN>=0?'green':'red'}" style="font-weight:500">${plN>=0?'+':''}${fmtCur(plN, cur)} <span style="font-size:10px">(${plPct.toFixed(1)}%)</span></td>
-        <td class="yellow">${fmtCur(annualDivN, cur)}</td>
-        <td>${divYield.toFixed(2)}%</td>
-        <td><button class="btn btn-sm" onclick="openStockSell('${s.id}')">Eladás</button></td>
+        <td><span class="badge ${stockTypeShort(s)==='Dist'?'badge-green':'badge-gray'}" title="${stockDivFreqLabel(s)}">${stockTypeShort(s)}</span></td>
+        <td>${fmtNum(g.qty)}</td>
+        <td>${fmtCur(g.avgN, g.cur)}</td>
+        <td>${fmtCur(g.curPriceN, g.cur)}</td>
+        <td>${fmtCur(g.investedN, g.cur)}</td>
+        <td><strong>${fmtCur(g.currentN, g.cur)}</strong></td>
+        <td class="${g.plN>=0?'green':'red'}" style="font-weight:500">${g.plN>=0?'+':''}${fmtCur(g.plN, g.cur)} <span style="font-size:10px">(${g.plPct.toFixed(1)}%)</span></td>
+        <td class="yellow">${fmtCur(g.annualDivN, g.cur)}</td>
+        <td>${g.divYield.toFixed(2)}%${s.divAuto ? ' <span style="font-size:9px;color:var(--accent2)" title="Automatikusan a Yahoo-ról">auto</span>' : ''}</td>
+        <td><button class="btn btn-sm" onclick="event.stopPropagation(); ${g.lots.length === 1 ? `openStockSell('${g.lots[0].id}')` : `openStockDetail('${g.ticker}')`}">Eladás</button></td>
       </tr>
     `;
   }).join('');
@@ -938,6 +1017,117 @@ function renderStocks() {
   plEl.className = 'stat-value ' + (totalPL>=0?'green':'red');
   document.getElementById('st-sum-pl-card').className = 'card ' + (totalPL>=0?'card-stat-green':'card-stat-red');
   document.getElementById('st-sum-div').textContent = fmt(totalDiv);
+
+  // Ha nyitva van egy részvény részletnézete, frissítjük
+  if (_openStockTicker) {
+    const dv = document.getElementById('stock-detail-view');
+    if (dv && dv.style.display !== 'none') {
+      if (groups[_openStockTicker]) {
+        const c = document.getElementById('stock-detail-content');
+        if (c) c.innerHTML = buildStockDetailHTML(_openStockTicker);
+      } else {
+        closeStockDetail();
+      }
+    }
+  }
+}
+
+let _openStockTicker = null;
+function openStockDetail(ticker) {
+  if (!state.stocks.some(s => s.ticker === ticker)) return;
+  _openStockTicker = ticker;
+  const lv = document.getElementById('stock-list-view');
+  const dv = document.getElementById('stock-detail-view');
+  const addBtn = document.getElementById('stock-add-btn');
+  if (lv) lv.style.display = 'none';
+  if (dv) dv.style.display = 'block';
+  if (addBtn) addBtn.style.display = 'none';
+  const c = document.getElementById('stock-detail-content');
+  if (c) c.innerHTML = buildStockDetailHTML(ticker);
+}
+function closeStockDetail() {
+  _openStockTicker = null;
+  const lv = document.getElementById('stock-list-view');
+  const dv = document.getElementById('stock-detail-view');
+  const addBtn = document.getElementById('stock-add-btn');
+  if (lv) lv.style.display = 'block';
+  if (dv) dv.style.display = 'none';
+  if (addBtn) addBtn.style.display = '';
+}
+
+function buildStockDetailHTML(ticker) {
+  const lots = state.stocks.filter(s => s.ticker === ticker);
+  if (!lots.length) return '';
+  const first = lots[0];
+  const cur = first.currency || 'HUF';
+  const rate = rateForCurrency(cur);
+  const currentPriceHuf = getLivePrice(ticker) || first.price;
+  const curPriceN = rate ? currentPriceHuf/rate : currentPriceHuf;
+
+  let totQty=0, totInvHuf=0, totInvN=0, totCurHuf=0;
+  const rowsHtml = [...lots].sort((a,b)=>(a.buyDate||'').localeCompare(b.buyDate||'')).map(l => {
+    const invHuf = l.qty * l.avg;
+    const avgN = (l.avgNative != null) ? l.avgNative : (rate ? l.avg/rate : l.avg);
+    const invN = l.qty * avgN;
+    const curN = l.qty * curPriceN;
+    const curHuf = l.qty * currentPriceHuf;
+    const plN = curN - invN;
+    const plPct = invN ? plN/invN*100 : 0;
+    totQty += l.qty; totInvHuf += invHuf; totInvN += invN; totCurHuf += curHuf;
+    return `<tr>
+      <td style="color:var(--muted)">${l.buyDate||'—'}</td>
+      <td>${fmtNum(l.qty)}</td>
+      <td>${fmtCur(avgN, cur)}</td>
+      <td>${fmtCur(invN, cur)}</td>
+      <td class="cyan">${fmtCur(curN, cur)}</td>
+      <td class="${plN>=0?'green':'red'}">${plN>=0?'+':''}${fmtCur(plN, cur)} <span style="font-size:10px">(${plPct.toFixed(1)}%)</span></td>
+      <td><button class="btn btn-sm" onclick="openStockSell('${l.id}')">Eladás</button></td>
+    </tr>`;
+  }).join('');
+
+  const avgN = totQty ? totInvN/totQty : 0;
+  const totPLHuf = totCurHuf - totInvHuf;
+  const totPLN = rate ? totPLHuf/rate : totPLHuf;
+  const totCurN = rate ? totCurHuf/rate : totCurHuf;
+  const totPLPct = totInvHuf ? totPLHuf/totInvHuf*100 : 0;
+  const divYield = stockDivYield(first, currentPriceHuf);
+  const annualDivHuf = stockIsCash(first) ? totCurHuf * divYield / 100 : 0;
+  const typeShort = stockTypeShort(first);
+  const liveBadge = getLivePrice(ticker) ? '<span class="badge badge-green">● élő</span>' : '';
+  const box = (label, val, cls) => `<div><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:4px">${label}</div><div class="${cls||''}" style="font-family:var(--display);font-size:16px;font-weight:700">${val}</div></div>`;
+
+  return `
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:4px">
+        <div style="font-family:var(--display);font-size:20px;font-weight:700">${ticker}</div>
+        <span class="badge ${typeShort==='Dist'?'badge-green':'badge-gray'}" title="${stockDivFreqLabel(first)}">${typeShort}</span>
+        ${liveBadge}
+      </div>
+      <div style="color:var(--muted);font-size:12px;margin-bottom:18px">${first.name?escHtml(first.name)+' &nbsp;|&nbsp; ':''}${lots.length} vétel &nbsp;|&nbsp; ${cur}</div>
+
+      <div class="grid g4" style="margin-bottom:20px">
+        ${box('Összes darab', fmtNum(totQty))}
+        ${box('Befektetett', fmtCur(totInvN, cur))}
+        ${box('P&L', `${totPLN>=0?'+':''}${fmtCur(totPLN, cur)} (${totPLPct.toFixed(1)}%)`, totPLN>=0?'green':'red')}
+        ${box('Éves osztalék', fmt(annualDivHuf), 'yellow')}
+      </div>
+
+      <div style="display:flex;flex-wrap:wrap;gap:20px;font-size:12px;margin-bottom:20px;padding-top:16px;border-top:1px solid var(--border)">
+        <div><span style="color:var(--muted)">Átlag vételár: </span><strong>${fmtCur(avgN, cur)}</strong></div>
+        <div><span style="color:var(--muted)">Jelenlegi ár: </span><strong>${fmtCur(curPriceN, cur)}</strong></div>
+        <div><span style="color:var(--muted)">Jelenlegi érték: </span><strong class="cyan">${fmtCur(totCurN, cur)}</strong></div>
+        <div><span style="color:var(--muted)">Osztalékhozam: </span><strong>${divYield.toFixed(2)}%${first.divAuto?' (auto)':''}</strong></div>
+      </div>
+
+      <div class="card-title" style="margin-bottom:12px">Vételek</div>
+      <div class="scroll-table">
+        <table>
+          <thead><tr><th>Vétel dátuma</th><th>Db</th><th>Vételár</th><th>Befektetett</th><th>Jelenlegi érték</th><th>P&amp;L</th><th></th></tr></thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+      </div>
+    </div>
+  `;
 }
 
 async function addCryptoTrade() {
