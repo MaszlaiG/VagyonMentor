@@ -79,7 +79,23 @@ function loginWithEmail() {
   }
   auth.signInWithEmailAndPassword(email, pass)
     .catch(err => {
-      if (loginError) loginError.textContent = hibaSzoveg(err);
+      if (loginError) { loginError.style.color = ''; loginError.textContent = hibaSzoveg(err); }
+    });
+}
+
+function resetPassword() {
+  const email = document.getElementById('login-email').value.trim();
+  const loginError = document.getElementById('login-error');
+  if (!email) {
+    if (loginError) { loginError.style.color = ''; loginError.textContent = 'Írd be az e-mail címed, oda küldjük a visszaállító linket.'; }
+    return;
+  }
+  auth.sendPasswordResetEmail(email)
+    .then(() => {
+      if (loginError) { loginError.style.color = 'var(--accent)'; loginError.textContent = 'Jelszó-visszaállító e-mailt küldtünk a ' + email + ' címre. Nézd meg a postaládád (a spam mappát is).'; }
+    })
+    .catch(err => {
+      if (loginError) { loginError.style.color = ''; loginError.textContent = hibaSzoveg(err); }
     });
 }
 
