@@ -121,10 +121,10 @@
     </div>
   </div>
 
-  <div class="grid g2" style="margin-bottom:24px">
+  <div class="grid g21" style="margin-bottom:24px">
     <div class="card">
-      <div class="card-title">Portfólió Statisztika</div>
-      <div id="d-portfolio-stats"></div>
+      <div class="card-title">Osztalék Naptár</div>
+      <div id="div-calendar-dash"></div>
     </div>
     <div class="card">
       <div class="card-title">Legnagyobb Pozíciók</div>
@@ -157,39 +157,53 @@
 <div class="tab-content" id="tab-portfolio">
   <div class="section-header">
     <div class="section-title">Részvényportfólió</div>
-    <button class="btn" onclick="openModal('stock-modal')">+ Részvény rögzítése</button>
+    <button class="btn" id="stock-add-btn" onclick="openModal('stock-modal')">+ Részvény rögzítése</button>
   </div>
 
   <div>
     <div>
-      <div class="grid g4" style="margin-bottom:16px">
-        <div class="card card-stat-purple">
-          <div class="card-title">Befektetett</div>
-          <div class="stat-value purple" id="st-sum-invested">0 Ft</div>
+      <div id="stock-list-view">
+        <div class="grid g4" style="margin-bottom:16px">
+          <div class="card card-stat-purple">
+            <div class="card-title">Befektetett</div>
+            <div class="stat-value purple" id="st-sum-invested">0 Ft</div>
+          </div>
+          <div class="card card-stat-cyan">
+            <div class="card-title">Jelenlegi érték</div>
+            <div class="stat-value cyan" id="st-sum-current">0 Ft</div>
+          </div>
+          <div class="card card-stat-dark" id="st-sum-pl-card">
+            <div class="card-title">P&amp;L</div>
+            <div class="stat-value" id="st-sum-pl">0 Ft</div>
+          </div>
+          <div class="card card-stat-yellow">
+            <div class="card-title">Éves osztalék</div>
+            <div class="stat-value yellow" id="st-sum-div">0 Ft</div>
+          </div>
         </div>
-        <div class="card card-stat-cyan">
-          <div class="card-title">Jelenlegi érték</div>
-          <div class="stat-value cyan" id="st-sum-current">0 Ft</div>
+
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-title">Osztalék Naptár</div>
+          <div id="div-calendar"></div>
         </div>
-        <div class="card card-stat-dark" id="st-sum-pl-card">
-          <div class="card-title">P&amp;L</div>
-          <div class="stat-value" id="st-sum-pl">0 Ft</div>
-        </div>
-        <div class="card card-stat-yellow">
-          <div class="card-title">Éves osztalék</div>
-          <div class="stat-value yellow" id="st-sum-div">0 Ft</div>
+
+        <div class="card">
+          <div class="card-title">Portfólió</div>
+          <div id="stock-refresh-bar"></div>
+          <div class="scroll-table">
+            <table>
+              <thead><tr><th>Ticker</th><th>Típus</th><th>Db</th><th>Átlag vételár</th><th>Jelenlegi ár</th><th>Befektetett</th><th>Jelenlegi érték</th><th>P&amp;L</th><th>Éves Osztalék</th><th>Osztalék</th><th></th></tr></thead>
+              <tbody id="stock-tbody"></tbody>
+            </table>
+          </div>
         </div>
       </div>
 
-      <div class="card">
-        <div class="card-title">Portfólió</div>
-        <div id="stock-refresh-bar"></div>
-        <div class="scroll-table">
-          <table>
-            <thead><tr><th>Ticker</th><th>Típus</th><th>Vétel dátuma</th><th>Db</th><th>Vételár</th><th>Jelenlegi ár</th><th>Befektetett</th><th>Jelenlegi érték</th><th>P&amp;L</th><th>Éves Osztalék</th><th>Osztalék</th><th></th></tr></thead>
-            <tbody id="stock-tbody"></tbody>
-          </table>
+      <div id="stock-detail-view" style="display:none">
+        <div style="margin-bottom:16px">
+          <button class="btn btn-secondary" onclick="closeStockDetail()">← Vissza a részvényekhez</button>
         </div>
+        <div id="stock-detail-content"></div>
       </div>
     </div>
 
@@ -228,13 +242,9 @@
           <button class="btn btn-secondary btn-sm" onclick="closeModal('stock-modal')">✕</button>
         </div>
         <div class="form-grid fg2" style="margin-bottom:12px">
-          <div>
+          <div style="grid-column:1 / -1">
             <label>Ticker</label>
-            <input type="text" id="st-ticker" placeholder="pl. AAPL">
-          </div>
-          <div>
-            <label>Teljes név (opcionális)</label>
-            <input type="text" id="st-name" placeholder="pl. Apple Inc.">
+            <input type="text" id="st-name" placeholder="pl. AAPL, MSFT, VOD.L">
           </div>
           <div>
             <label>Deviza</label>
@@ -252,43 +262,17 @@
             <label id="st-avg-label">Vételi ár (HUF)</label>
             <input type="number" id="st-avg" placeholder="0">
           </div>
-          <div id="st-div-wrap" style="display:none">
-            <label id="st-div-label">Éves osztalékhozam (%)</label>
-            <input type="number" id="st-div" placeholder="0" step="0.01">
-          </div>
-          <div>
-            <label>Osztalék típusa</label>
-            <select id="st-divtype" onchange="updateStockDivType()">
-              <option value="none" selected>Nem fizet osztalékot</option>
-              <option value="cash">Disztribúciós / Osztalékfizető</option>
-              <option value="acc">Akkumulációs / Felhalmozó</option>
-            </select>
-          </div>
-          <div id="st-divfreq-wrap" style="display:none">
-            <label>Osztalék gyakorisága</label>
-            <select id="st-divfreq" onchange="updateStockDivMonths()">
-              <option value="yearly">Évente</option>
-              <option value="quarterly">Negyedévente</option>
-              <option value="monthly">Havonta</option>
-            </select>
-          </div>
-          <div id="st-divmonths-wrap" style="display:none">
-            <label>Mely 4 hónapban fizet</label>
-            <select id="st-divmonths">
-              <option value="1">Jan · Ápr · Júl · Okt</option>
-              <option value="2">Feb · Máj · Aug · Nov</option>
-              <option value="3">Már · Jún · Szep · Dec</option>
-            </select>
-          </div>
           <div>
             <label>Vétel dátuma</label>
             <input type="date" id="st-date">
           </div>
         </div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px">A jelenlegi árat és az osztalékot a rendszer a ticker alapján automatikusan követi a Yahoo-ról.</div>
         <div id="st-fx-info" style="font-size:11px;color:var(--muted);margin-bottom:12px;display:none">
           Az árak automatikusan HUF-ra lesznek átváltva rögzítéskor (1 USD ≈ <span id="st-fx-rate">360</span> Ft)
         </div>
-        <button class="btn" onclick="addStock()" style="width:100%">+ Hozzáadás</button>
+        <div id="st-add-msg" style="font-size:12px;margin-bottom:10px;min-height:16px"></div>
+        <button class="btn" id="st-add-btn" onclick="addStock()" style="width:100%">+ Hozzáadás</button>
       </div>
     </div>
   </div>

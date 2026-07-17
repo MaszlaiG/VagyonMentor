@@ -190,10 +190,14 @@ html.dark .header-nav button.active {
 .watch-grid { grid-template-columns: repeat(4, 1fr); }
 @media (max-width: 1024px) { .watch-grid { grid-template-columns: repeat(3, 1fr); } }
 @media (max-width: 680px)  { .watch-grid { grid-template-columns: repeat(2, 1fr); } }
-@media (max-width: 440px)  { .watch-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 440px)  { .watch-grid { grid-template-columns: 1fr; } }
 
 /* NAV TABS */
-.scroll-table { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.scroll-table { width: 100%; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+/* Rács-/flex-elemek zsugorodhassanak a tartalom alá, hogy a széles táblázat a
+   .scroll-table-en belül görgethető legyen (és ne feszítse szét a layoutot mobilon). */
+.grid > *, .dash-span-grid > *, .div-cal-grid > *, .watch-grid > *, .card { min-width: 0; }
 .scroll-y-fade {
   scrollbar-width: thin;
   -webkit-overflow-scrolling: touch;
@@ -249,6 +253,11 @@ main { padding: 24px 32px 48px; max-width: 1400px; }
 /* A magas Vagyonmegoszlás kártyán a kördiagram fent, az adatok alatta */
 .dash-donut-span .donut-wrap { flex-direction: column; align-items: center; gap: 18px; }
 .dash-donut-span .donut-legend { width: 100%; }
+
+/* Osztalék naptár: 6 hónap soronként (kisebb kijelzőn kevesebb) */
+.div-cal-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; }
+@media (max-width: 900px) { .div-cal-grid { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 560px) { .div-cal-grid { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 1024px) {
   .dash-span-grid { grid-template-columns: 1fr 1fr; }
   .dash-donut-span { grid-column: auto; grid-row: auto; }
