@@ -511,9 +511,6 @@ async function fetchStockDividendInfo(ticker) {
         const list = Object.values(divs).filter(d => d && typeof d.amount === 'number').sort((a,b)=>a.date-b.date);
         if (!list.length) continue;
         const nowSec = Date.now()/1000;
-        // Éves osztalék: az utolsó 365 nap kifizetéseinek összege
-        let annual = 0;
-        list.forEach(d => { if (d.date >= nowSec - 365*24*3600) annual += d.amount; });
         // Hónap-térkép: minden naptári hónaphoz a legutóbbi (utolsó ~15 hó) kifizetés összege
         const byMonth = {};
         list.forEach(d => {
@@ -522,15 +519,15 @@ async function fetchStockDividendInfo(ticker) {
             byMonth[m] = d.amount; // a későbbi felülírja → a legfrissebb marad
           }
         });
-<<<<<<< HEAD
         // Havi fizető felismerése: ha az elmúlt évben ≥10 kifizetés volt, minden hónapot kitöltünk
         const paymentsLastYear = list.filter(d => d.date >= nowSec - 365*24*3600).length;
         if (paymentsLastYear >= 10) {
           const lastAmt = list[list.length - 1].amount;
           for (let m = 1; m <= 12; m++) byMonth[m] = lastAmt;
         }
-=======
->>>>>>> b33577d0737541a73038e969ca67721d4c400f5d
+        // Éves osztalék = a hónap-térkép összege (aktuális futó ütem), hogy a
+        // részvény oldali "Éves osztalék" és a naptár összege megegyezzen.
+        const annual = Object.values(byMonth).reduce((a,v)=>a+v, 0);
         if (annual > 0 || Object.keys(byMonth).length) return { annual, byMonth };
       }
     }
@@ -555,10 +552,7 @@ async function refreshAllPrices() {
 
   const failedTickers = [];
   const divInfoCache = {};
-<<<<<<< HEAD
   const nameCache = {};
-=======
->>>>>>> b33577d0737541a73038e969ca67721d4c400f5d
   for (const s of state.stocks) {
     const ticker = s.ticker.toUpperCase();
     const price = await fetchStockPriceHuf(s.ticker, s.currency);
@@ -568,15 +562,12 @@ async function refreshAllPrices() {
     } else if (!failedTickers.includes(ticker)) {
       failedTickers.push(ticker);
     }
-<<<<<<< HEAD
     // Hiányzó teljes név pótlása a tickerből (Yahoo kereső)
     if (!s.name) {
       if (!(ticker in nameCache)) nameCache[ticker] = await resolveTicker(s.ticker);
       const r = nameCache[ticker];
       if (r && r.name) s.name = r.name;
     }
-=======
->>>>>>> b33577d0737541a73038e969ca67721d4c400f5d
     // Osztalék automatikus követése (éves összeg + fizetési hónapok)
     if (s.divAuto && (s.divType || 'cash') === 'cash') {
       if (!(ticker in divInfoCache)) divInfoCache[ticker] = await fetchStockDividendInfo(s.ticker);
@@ -1091,14 +1082,9 @@ function manualDivMonthMap(s) {
 }
 
 function renderDividendCalendar() {
-<<<<<<< HEAD
   const targets = ['div-calendar', 'div-calendar-dash'].map(id => document.getElementById(id)).filter(Boolean);
   if (!targets.length) return;
   const setHtml = (html) => targets.forEach(el => { el.innerHTML = html; });
-=======
-  const el = document.getElementById('div-calendar');
-  if (!el) return;
->>>>>>> b33577d0737541a73038e969ca67721d4c400f5d
   const monthNames = ['Január','Február','Március','Április','Május','Június','Július','Augusztus','Szeptember','Október','November','December'];
 
   // tickerenkénti aggregálás
@@ -1114,30 +1100,19 @@ function renderDividendCalendar() {
     const rate = rateForCurrency(first.currency || 'HUF');
     const monthMap = (first.divAuto && first.divByMonthNative) ? first.divByMonthNative : manualDivMonthMap(first);
     if (!monthMap) return;
-<<<<<<< HEAD
     const monthCount = Object.keys(monthMap).length; // 12=havi, 4=negyedéves, 1=éves
     Object.entries(monthMap).forEach(([m, perShareN]) => {
       const amountHuf = perShareN * qty * rate;
       if (amountHuf > 0) { byMonth[+m].push({ ticker, amountHuf, monthCount }); anyData = true; }
-=======
-    Object.entries(monthMap).forEach(([m, perShareN]) => {
-      const amountHuf = perShareN * qty * rate;
-      if (amountHuf > 0) { byMonth[+m].push({ ticker, amountHuf }); anyData = true; }
->>>>>>> b33577d0737541a73038e969ca67721d4c400f5d
     });
   });
 
   if (!anyData) {
-<<<<<<< HEAD
     setHtml('<div style="color:var(--muted);font-size:12px;padding:8px 0">Még nincs ismert osztalék-ütemezés. Frissíts (élő árfolyam), hogy a rendszer lehúzza az osztalékfizető részvények fizetési hónapjait.</div>');
-=======
-    el.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:8px 0">Még nincs ismert osztalék-ütemezés. Frissíts (élő árfolyam), hogy a rendszer lehúzza az osztalékfizető részvények fizetési hónapjait.</div>';
->>>>>>> b33577d0737541a73038e969ca67721d4c400f5d
     return;
   }
 
   const grandTotal = Object.values(byMonth).reduce((a, arr) => a + arr.reduce((x,i)=>x+i.amountHuf, 0), 0);
-<<<<<<< HEAD
   setHtml(
     `<div style="font-size:11px;color:var(--muted);margin-bottom:12px">Éves osztalék összesen: <strong class="yellow">${fmt(grandTotal)}</strong> (a jelenlegi pozíciók és a legutóbbi kifizetések alapján)</div>` +
     `<div class="div-cal-grid">` +
@@ -1156,25 +1131,6 @@ function renderDividendCalendar() {
     }).join('') +
     `</div>`
   );
-=======
-  el.innerHTML =
-    `<div style="font-size:11px;color:var(--muted);margin-bottom:12px">Éves osztalék összesen: <strong class="yellow">${fmt(grandTotal)}</strong> (a jelenlegi pozíciók és a legutóbbi kifizetések alapján)</div>` +
-    `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px">` +
-    monthNames.map((name, i) => {
-      const m = i+1;
-      const items = byMonth[m].sort((a,b)=>b.amountHuf - a.amountHuf);
-      const total = items.reduce((a,x)=>a+x.amountHuf, 0);
-      const active = items.length > 0;
-      return `<div style="border:1px solid var(--border);border-radius:10px;padding:11px;${active?'':'opacity:0.45'}">
-        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:${active?'8px':'0'}">
-          <span style="font-weight:700;font-size:12px">${name}</span>
-          <span class="yellow" style="font-weight:700;font-size:12px">${active?fmt(total):'—'}</span>
-        </div>
-        ${items.map(x=>`<div style="display:flex;justify-content:space-between;font-size:11px;margin-top:4px"><span style="font-weight:600">${x.ticker}</span><span style="color:var(--muted)">${fmt(x.amountHuf)}</span></div>`).join('')}
-      </div>`;
-    }).join('') +
-    `</div>`;
->>>>>>> b33577d0737541a73038e969ca67721d4c400f5d
 }
 
 function openStockDetail(ticker) {
