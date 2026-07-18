@@ -325,11 +325,12 @@ function exportData() {
   }
 }
 
-/* ---- Pénzügyi kimutatás (nyomtatható / PDF) ----
-   A dashboard-dal egyező számításokból egy önálló, világos témájú
-   nyomtatási nézetet állít elő, amit a böngésző „PDF mentése" célként
-   ment le. Így minden magyar karakter helyesen jelenik meg, külső
-   könyvtár nélkül. */
+/* ---- Pénzügyi kimutatás (automatikus PDF) ----
+   A dashboard-dal egyező számításokból egy új fülön egyből a kész PDF-et
+   jeleníti meg a böngésző PDF-nézegetőjében (ahol meg is tekinthető és
+   letölthető), nyomtatási ablak nélkül. Minden oldalon „Vagyon Mentor"
+   fejléc és lap alján középen oldalszám; a ki nem férő táblázatok új
+   oldalon kezdődnek (html2pdf + jsPDF). */
 function generateFinancialReport() {
   const esc = escHtml;
   const spot = state.goldSpot || 28000;
@@ -540,18 +541,15 @@ section{margin-bottom:6px}
 thead{display:table-header-group}
 tr{page-break-inside:avoid}
 footer{margin-top:30px;padding-top:12px;border-top:1px solid #eee;color:#999;font-size:10px;line-height:1.6}
-.toolbar{position:sticky;top:0;z-index:5;background:#222;color:#fff;padding:10px 16px;display:flex;gap:10px;align-items:center;font-size:12px;flex-wrap:wrap}
-.toolbar button{background:#b8873a;color:#fff;border:none;padding:8px 15px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600}
-.toolbar .sec{background:#444}
-.toolbar span{color:#bbb;margin-left:auto}
+#vm-loader{position:fixed;inset:0;z-index:9999;background:#eceae4;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;font-size:15px;color:#555}
+#vm-loader .spin{width:34px;height:34px;border:3px solid #d8d2c6;border-top-color:#b8873a;border-radius:50%;animation:vmspin 0.8s linear infinite}
+@keyframes vmspin{to{transform:rotate(360deg)}}
 @media print{body{background:#fff}.no-print{display:none!important}.doc{max-width:none;padding:0}@page{size:A4;margin:14mm}}
-</style></head>
+</style>
+<script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.2/dist/html2pdf.bundle.min.js"></script>
+</head>
 <body>
-<div class="toolbar no-print">
-  <button onclick="window.print()">PDF mentése / Nyomtatás</button>
-  <button class="sec" onclick="window.close()">Bezárás</button>
-  <span>A nyomtatási ablakban válaszd célként a „PDF mentése" opciót.</span>
-</div>
+<div id="vm-loader"><div class="spin"></div><div>Kimutatás készítése…</div></div>
 <div class="doc">
   <div class="brand">VagyonMentor</div>
   <h1>Pénzügyi kimutatás</h1>
@@ -573,6 +571,54 @@ footer{margin-top:30px;padding-top:12px;border-top:1px solid #eee;color:#999;fon
     Ez a kimutatás tájékoztató jellegű, a VagyonMentor alkalmazásban rögzített adatokból és az utolsó lekért árfolyamokból készült. Nem minősül pénzügyi tanácsadásnak vagy hivatalos elszámolásnak. A pontos, naprakész értékekért frissítsd az élő árfolyamokat a kimutatás előtt.
   </footer>
 </div>
+<script>
+(function(){
+  var loader=document.getElementById('vm-loader');
+  function msg(t){ if(loader){ loader.innerHTML='<div style="max-width:340px;text-align:center;line-height:1.55">'+t+'</div>'; } }
+  var waited=0;
+  function run(){
+    if(typeof html2pdf==='undefined'){
+      waited+=150;
+      if(waited>12000){ msg('A PDF-készítő könyvtár nem töltődött be. Ellenőrizd az internetkapcsolatot, majd próbáld újra.'); return; }
+      setTimeout(run,150); return;
+    }
+    var el=document.querySelector('.doc');
+    var opt={
+      margin:[17,10,15,10],
+      filename:'VagyonMentor_penzugyi_kimutatas_${dateFile}.pdf',
+      image:{type:'jpeg',quality:0.98},
+      html2canvas:{scale:2,backgroundColor:'#ffffff',useCORS:true},
+      jsPDF:{unit:'mm',format:'a4',orientation:'portrait'},
+      pagebreak:{mode:['css','legacy'],avoid:['section','tr']}
+    };
+    html2pdf().set(opt).from(el).toPdf().get('pdf').then(function(pdf){
+      var total=pdf.internal.getNumberOfPages();
+      var pw=pdf.internal.pageSize.getWidth();
+      var ph=pdf.internal.pageSize.getHeight();
+      for(var i=1;i<=total;i++){
+        pdf.setPage(i);
+        pdf.setFont('helvetica','bold'); pdf.setFontSize(10); pdf.setTextColor(184,135,58);
+        pdf.text('Vagyon Mentor', pw/2, 9, {align:'center'});
+        pdf.setDrawColor(228,222,210); pdf.setLineWidth(0.2); pdf.line(10,11.5,pw-10,11.5);
+        pdf.setFont('helvetica','normal'); pdf.setFontSize(8.5); pdf.setTextColor(150,150,150);
+        pdf.text(i+' / '+total, pw/2, ph-6, {align:'center'});
+      }
+      try { pdf.setProperties({ title:'VagyonMentor penzugyi kimutatas ${dateFile}' }); } catch(e){}
+      // A blobot ebben az ablakban hozzuk létre és iframe-be ágyazzuk,
+      // hogy a cím ne vonódjon vissza (nem navigálunk el).
+      var url=URL.createObjectURL(pdf.output('blob'));
+      document.body.innerHTML='';
+      document.body.style.margin='0';
+      var f=document.createElement('iframe');
+      f.src=url;
+      f.setAttribute('style','position:fixed;inset:0;width:100%;height:100%;border:0;background:#fff');
+      f.setAttribute('title','Pénzügyi kimutatás');
+      document.body.appendChild(f);
+    }).catch(function(){ msg('Nem sikerült a PDF elkészítése. Zárd be az ablakot és próbáld újra.'); });
+  }
+  run();
+})();
+</script>
 </body></html>`;
 
   const w = window.open('', '_blank');
@@ -581,8 +627,6 @@ footer{margin-top:30px;padding-top:12px;border-top:1px solid #eee;color:#999;fon
   w.document.write(html);
   w.document.close();
   w.focus();
-  // rövid késleltetés, hogy a tartalom biztosan elrendeződjön a nyomtatás előtt
-  setTimeout(() => { try { w.print(); } catch(e){} }, 450);
 }
 
 function importData(input) {
@@ -2356,7 +2400,8 @@ function calcPledgeEndDate() {
   const info = document.getElementById('pl-end-info');
   const endEl = document.getElementById('pl-end');
   if (!start || !days) { endEl.value = ''; info.textContent = ''; return; }
-  const end = pledgeAddDays(start, days);
+  // A zálogba adás napja az 1. nap (inkluzív számolás), ezért days - 1.
+  const end = pledgeAddDays(start, days - 1);
   if (end) {
     endEl.value = toLocalDateStr(end);
     info.textContent = `Lejárat: ${end.toLocaleDateString('hu-HU')} (${days} nap futamidő)`;
@@ -2379,20 +2424,32 @@ function populatePledgeGoldSelect() {
   if (!box) return;
   if (!state.goldItems.length) {
     box.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:6px 8px">Nincs rögzített aranytétel</div>';
+    updatePledgeGoldSummary();
     return;
   }
   const used = pledgedGoldIds();
   const available = state.goldItems.filter(g => !used.has(g.id));
   if (!available.length) {
     box.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:6px 8px">Minden aranytétel zálogban van</div>';
+    updatePledgeGoldSummary();
     return;
   }
   box.innerHTML = available.map(g => `
     <label style="display:flex;align-items:center;gap:8px;padding:6px 8px;font-size:12px;cursor:pointer">
-      <input type="checkbox" value="${g.id}" style="width:16px;height:16px;accent-color:var(--accent);flex-shrink:0">
+      <input type="checkbox" value="${g.id}" onchange="updatePledgeGoldSummary()" style="width:16px;height:16px;accent-color:var(--accent);flex-shrink:0">
       <span>${g.name} — ${fmtNum(g.grams)} g${g.code ? ' ('+g.code+')' : ''}</span>
     </label>
   `).join('');
+  updatePledgeGoldSummary();
+}
+
+// A lenyitható aranytétel-választó összegző feliratának frissítése
+function updatePledgeGoldSummary() {
+  const summary = document.getElementById('pl-gold-summary');
+  if (!summary) return;
+  const n = document.querySelectorAll('#pl-gold input:checked').length;
+  summary.querySelector('.pl-gold-summary-text').textContent =
+    n ? `${n} aranytétel kiválasztva` : 'Válassz aranytételt…';
 }
 
 function updatePledgeNet() {
@@ -2416,20 +2473,23 @@ function addPledge() {
   const start     = document.getElementById('pl-start').value || now();
   const days      = parseInt(document.getElementById('pl-term').value)||0;
   const rate      = parseFloat(document.getElementById('pl-rate').value)||0;
+  const thm       = parseFloat(document.getElementById('pl-thm').value)||0;
   if (!principal || !days) return;
   const goldNames = goldIds.map(id => {
     const g = state.goldItems.find(x => x.id === id);
     return g ? g.name : '—';
   });
-  const endD = pledgeAddDays(start, days);
+  // A zálogba adás napja az 1. nap (inkluzív számolás), ezért days - 1.
+  const endD = pledgeAddDays(start, days - 1);
   const end = endD ? toLocalDateStr(endD) : '';
-  state.pledges.push({ id:uid(), goldIds, goldNames, ticketNo, principal, feePct, start, days, rate, end });
+  state.pledges.push({ id:uid(), goldIds, goldNames, ticketNo, principal, feePct, start, days, rate, thm, end });
   save();
-  ['pl-principal','pl-fee','pl-rate','pl-end','pl-ticket'].forEach(id => {
+  ['pl-principal','pl-fee','pl-rate','pl-thm','pl-end','pl-ticket'].forEach(id => {
     const el = document.getElementById(id); if (el) el.value = '';
   });
   document.getElementById('pl-end-info').textContent = '';
   document.getElementById('pl-net-info').textContent = '';
+  const goldDd = document.querySelector('.pl-gold-dd'); if (goldDd) goldDd.removeAttribute('open');
   closeModal('pledge-modal');
   renderAll();
 }
@@ -2503,11 +2563,12 @@ function calcPledgeDebt(p) {
   let termYears, elapsedYears, termLabel, elapsedLabel;
   if (p.days != null) {
     const days = p.days;
-    termYears = days / 365;
+    // A zálogház 360 napos évvel számol (napi kamat = éves kamat / 360).
+    termYears = days / 360;
     let ed = 0;
     if (p.start) ed = Math.floor((Date.now() - new Date(p.start).getTime()) / 86400000);
     ed = Math.max(0, Math.min(ed, days));
-    elapsedYears = ed / 365;
+    elapsedYears = ed / 360;
     termLabel = `${days} nap`;
     elapsedLabel = `${ed} / ${days} nap`;
   } else {
@@ -2615,6 +2676,7 @@ function buildPledgeDetailHTML(p) {
       <div style="display:flex;flex-wrap:wrap;gap:20px;font-size:12px;margin-bottom:20px;padding-top:16px;border-top:1px solid var(--border)">
         <div><span style="color:var(--muted)">Kezelési költség: </span><strong class="red">${d.feePct}% (${fmt(d.fee)})</strong></div>
         <div><span style="color:var(--muted)">Kamat: </span><strong>${p.rate}% / év</strong></div>
+        <div><span style="color:var(--muted)">THM: </span><strong>${p.thm ? p.thm + '%' : '—'}</strong></div>
         <div><span style="color:var(--muted)">Futamidő: </span><strong>${d.termLabel}</strong></div>
         <div><span style="color:var(--muted)">Eddigi kamat: </span><strong class="yellow">${fmt(d.accrued)}</strong></div>
         <div><span style="color:var(--muted)">Teljes kamat (lejáratig): </span><strong class="yellow">${fmt(d.totalInterest)}</strong></div>
@@ -2714,6 +2776,7 @@ function renderPledges() {
         <div style="display:flex;flex-wrap:wrap;gap:20px;font-size:12px">
           <div><span style="color:var(--muted)">Kezelési költség: </span><strong class="red">${d.feePct}% (${fmt(d.fee)})</strong></div>
           <div><span style="color:var(--muted)">Kamat: </span><strong>${p.rate}% / év</strong></div>
+          <div><span style="color:var(--muted)">THM: </span><strong>${p.thm ? p.thm + '%' : '—'}</strong></div>
           <div><span style="color:var(--muted)">Futamidő: </span><strong>${d.termLabel}</strong></div>
           <div><span style="color:var(--muted)">Eddigi kamat: </span><strong class="yellow">${fmt(d.accrued)}</strong></div>
           <div><span style="color:var(--muted)">Teljes kamat (lejáratig): </span><strong class="yellow">${fmt(d.totalInterest)}</strong></div>

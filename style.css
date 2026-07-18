@@ -391,6 +391,51 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); box-sh
 select option { background: var(--surface); }
 input[readonly] { background: var(--surface2); color: var(--muted); }
 
+/* Lenyitható aranytétel-választó (1 soros vezérlő, nyitva overlay lista) */
+.pl-gold-dd { position: relative; }
+.pl-gold-dd > summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 7px;
+  color: var(--text);
+  font-size: 13px;
+  padding: 9px 12px;
+  user-select: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.pl-gold-dd > summary::-webkit-details-marker { display: none; }
+.pl-gold-dd > summary::after {
+  content: "▾";
+  color: var(--muted);
+  font-size: 11px;
+  flex-shrink: 0;
+  transition: transform 0.15s;
+}
+.pl-gold-dd > summary:hover { border-color: var(--accent3); }
+.pl-gold-dd[open] > summary { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(31, 75, 58, 0.14); }
+.pl-gold-dd[open] > summary::after { transform: rotate(180deg); }
+.pl-gold-dd > #pl-gold {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 5px;
+  max-height: 150px;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  padding: 4px;
+  z-index: 30;
+  box-shadow: 0 10px 28px rgba(20, 32, 24, 0.18);
+}
+
 /* kompakt select táblázatsorba / fejlécbe */
 .select-sm { width: auto; font-size: 12px; padding: 6px 10px; border-radius: 7px; }
 .row-select { width: auto; font-size: 11.5px; font-weight: 600; padding: 4px 8px; border-radius: 6px; background: var(--surface2); }
