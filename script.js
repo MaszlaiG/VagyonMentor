@@ -309,6 +309,266 @@ function exportData() {
   }
 }
 
+/* ---- Pénzügyi kimutatás (nyomtatható / PDF) ----
+   A dashboard-dal egyező számításokból egy önálló, világos témájú
+   nyomtatási nézetet állít elő, amit a böngésző „PDF mentése" célként
+   ment le. Így minden magyar karakter helyesen jelenik meg, külső
+   könyvtár nélkül. */
+function generateFinancialReport() {
+  const esc = escHtml;
+  const spot = state.goldSpot || 28000;
+  const neg = n => (n > 0 ? '−' : '') + fmt(n);
+  const pl = (n, pct) => `<span class="${n>=0?'pos':'neg'}">${n>=0?'+':''}${fmt(n)}${pct!=null&&isFinite(pct)?` (${n>=0?'+':''}${pct.toFixed(1)}%)`:''}</span>`;
+
+  // --- Arany ---
+  const goldRows = state.goldItems.map(g => {
+    const val = goldItemValue(g, spot);
+    const c = g.cost || 0;
+    return { g, val, cost: c, pl: val - c, plPct: c ? (val - c) / c * 100 : null };
+  });
+  const goldVal = goldRows.reduce((a,r)=>a+r.val,0);
+  const goldCost = goldRows.reduce((a,r)=>a+r.cost,0);
+  const goldPL = goldVal - goldCost;
+
+  // --- Részvények (tickerenként, HUF) ---
+  const stGroups = {};
+  state.stocks.forEach(s => { (stGroups[s.ticker] = stGroups[s.ticker] || []).push(s); });
+  const stockRows = Object.entries(stGroups).map(([ticker, lots]) => {
+    const first = lots[0];
+    const price = getLivePrice(ticker) || first.price;
+    let qty = 0, invHuf = 0;
+    lots.forEach(l => { qty += l.qty; invHuf += l.qty * l.avg; });
+    const curHuf = qty * price;
+    const divYield = stockDivYield(first, price);
+    const annualDiv = stockIsCash(first) ? curHuf * divYield / 100 : 0;
+    return { ticker, name: first.name || '', qty, avgHuf: qty ? invHuf/qty : 0, priceHuf: price,
+             invHuf, curHuf, pl: curHuf - invHuf, plPct: invHuf ? (curHuf - invHuf)/invHuf*100 : null, annualDiv };
+  }).sort((a,b)=>b.curHuf - a.curHuf);
+  const stockVal = stockRows.reduce((a,r)=>a+r.curHuf,0);
+  const stockCost = stockRows.reduce((a,r)=>a+r.invHuf,0);
+  const stockPL = stockVal - stockCost;
+  const annualDiv = annualStockDividendHuf();
+
+  // --- Kripto (nyitott pozíció coinonként, HUF) ---
+  const coins = calcCryptoPL();
+  const cryptoRows = Object.entries(coins).map(([coin, c]) => {
+    const openQty = c.buys.reduce((a,b)=>a+b.qty,0);
+    if (openQty <= 0) return null;
+    const openCost = c.buys.reduce((a,b)=>a+b.qty*b.price,0);
+    const live = getLivePrice(coin);
+    const curVal = live ? openQty * live : openCost;
+    return { coin, qty: openQty, avgHuf: openCost/openQty, priceHuf: live || openCost/openQty,
+             invHuf: openCost, curHuf: curVal, pl: curVal - openCost, plPct: openCost ? (curVal-openCost)/openCost*100 : null };
+  }).filter(Boolean).sort((a,b)=>b.curHuf - a.curHuf);
+  const cryptoVal = cryptoRows.reduce((a,r)=>a+r.curHuf,0);
+  const cryptoCost = cryptoRows.reduce((a,r)=>a+r.invHuf,0);
+  const cryptoPL = cryptoVal - cryptoCost;
+
+  // --- Hitelek ---
+  const loanRows = state.loans.map(l => ({ l, remaining: calcRemaining(l) }));
+  const totalLoan = loanRows.reduce((a,r)=>a+r.remaining,0);
+  const loanOrig = state.loans.reduce((a,l)=>a+(l.orig||0),0);
+  const monthlyLoan = state.loans.reduce((a,l)=>a+(l.monthly||0),0);
+
+  // --- Zálog ---
+  const pledgeRows = state.pledges.map(p => ({ p, d: calcPledgeDebt(p) }));
+  const totalPledge = pledgeTotalDebt();
+  const pledgePrincipal = pledgeRows.reduce((a,r)=>a+(r.d.principal||0),0);
+  const pledgeRepay = pledgeRows.reduce((a,r)=>a+(r.d.totalRepay||0),0);
+
+  // --- Szolgáltatások (aktív) ---
+  const svcRows = state.services.filter(s=>s.active).map(s => ({ s, monthly: serviceMonthlyCost(s), next: nextChargeDate(s.day) }));
+  const svcMonthly = svcRows.reduce((a,r)=>a+r.monthly,0);
+
+  // --- Összesítők (a dashboard logikája szerint) ---
+  const currentValue = stockVal + goldVal + cryptoVal;
+  const investedCost = stockCost + goldCost + cryptoCost;
+  const unrealPL = currentValue - investedCost;
+  const totalLiab = totalLoan + totalPledge;
+  const netWorth = currentValue - totalLiab;
+  const totalMonthly = monthlyLoan + svcMonthly;
+  const share = v => currentValue > 0 ? (v / currentValue * 100).toFixed(1) + '%' : '—';
+
+  // --- Fiók infó ---
+  let acctName = '', acctEmail = '';
+  try { acctName = (document.getElementById('acc-name') || {}).value || ''; } catch(e){}
+  try { acctEmail = (document.getElementById('acc-email') || {}).value || ''; } catch(e){}
+  try { if (!acctEmail && typeof auth !== 'undefined' && auth.currentUser) acctEmail = auth.currentUser.email || ''; } catch(e){}
+
+  const dt = new Date();
+  const genStr = dt.toLocaleString('hu-HU');
+  const pad = x => String(x).padStart(2,'0');
+  const dateFile = `${dt.getFullYear()}-${pad(dt.getMonth()+1)}-${pad(dt.getDate())}`;
+  const priceNote = goldSpotLive ? 'élő árfolyamok alapján' : 'utolsó ismert árfolyamok alapján';
+
+  const tbl = (head, body, foot) =>
+    `<table><thead><tr>${head}</tr></thead><tbody>${body || `<tr><td colspan="20" class="muted" style="text-align:center;padding:14px">Nincs rögzített tétel.</td></tr>`}</tbody>${foot?`<tfoot>${foot}</tfoot>`:''}</table>`;
+
+  // Összefoglaló
+  const sumItem = (lbl, val, cls) => `<div class="sum-item"><span class="lbl">${lbl}</span><span class="val ${cls||''}">${val}</span></div>`;
+  const summaryHtml = `<div class="summary">
+    ${sumItem('Nettó vagyon', fmt(netWorth), netWorth>=0?'pos':'neg')}
+    ${sumItem('Befektetett eszközök értéke', fmt(currentValue))}
+    ${sumItem('Bekerülési (befektetett) költség', fmt(investedCost))}
+    ${sumItem('Nem realizált eredmény', pl(unrealPL, investedCost>0?unrealPL/investedCost*100:null))}
+    ${sumItem('Összes tartozás (hitel + zálog)', fmt(totalLiab))}
+    ${sumItem('Havi fix kiadás (törlesztő + előfizetés)', fmt(totalMonthly))}
+    ${sumItem('Éves osztalék (becsült)', fmt(annualDiv), 'gold')}
+    ${sumItem('Havi osztalék (becsült)', fmt(annualDiv/12), 'gold')}
+  </div>`;
+
+  // Vagyonmegoszlás
+  const allocHtml = tbl(
+    `<th>Tétel</th><th class="num">Érték</th><th class="num">Arány</th>`,
+    `<tr><td>Arany</td><td class="num">${fmt(goldVal)}</td><td class="num">${share(goldVal)}</td></tr>
+     <tr><td>Részvény</td><td class="num">${fmt(stockVal)}</td><td class="num">${share(stockVal)}</td></tr>
+     <tr><td>Kripto</td><td class="num">${fmt(cryptoVal)}</td><td class="num">${share(cryptoVal)}</td></tr>
+     <tr class="subtotal"><td>Befektetett eszközök összesen</td><td class="num">${fmt(currentValue)}</td><td class="num">100%</td></tr>
+     <tr><td>Hitel</td><td class="num neg">${neg(totalLoan)}</td><td class="num muted">—</td></tr>
+     <tr><td>Zálog</td><td class="num neg">${neg(totalPledge)}</td><td class="num muted">—</td></tr>`,
+    `<tr><td>Nettó vagyon</td><td class="num ${netWorth>=0?'pos':'neg'}">${fmt(netWorth)}</td><td></td></tr>`
+  );
+
+  // Arany
+  const goldBody = goldRows.map(r => `<tr>
+    <td>${esc(r.g.name||'Arany')}</td><td>${esc(r.g.code||'—')}</td><td>${esc(r.g.form||'—')}</td><td>${esc(r.g.purity||'—')}</td>
+    <td class="num">${fmtNum(r.g.grams)}</td><td class="num">${fmt(r.cost)}</td><td class="num">${fmt(r.val)}</td><td class="num">${pl(r.pl, r.plPct)}</td>
+  </tr>`).join('');
+  const goldHtml = tbl(
+    `<th>Megnevezés</th><th>Kód</th><th>Forma</th><th>Tisztaság</th><th class="num">Tömeg (g)</th><th class="num">Bekerülés</th><th class="num">Jelenlegi érték</th><th class="num">Eredmény</th>`,
+    goldBody,
+    goldRows.length ? `<tr><td colspan="5">Összesen</td><td class="num">${fmt(goldCost)}</td><td class="num">${fmt(goldVal)}</td><td class="num">${pl(goldPL, goldCost?goldPL/goldCost*100:null)}</td></tr>` : ''
+  );
+
+  // Részvények
+  const stockBody = stockRows.map(r => `<tr>
+    <td><strong>${esc(r.ticker)}</strong></td><td>${esc(r.name||'—')}</td><td class="num">${fmtNum(r.qty)}</td>
+    <td class="num">${fmt(r.avgHuf)}</td><td class="num">${fmt(r.priceHuf)}</td><td class="num">${fmt(r.invHuf)}</td>
+    <td class="num">${fmt(r.curHuf)}</td><td class="num">${pl(r.pl, r.plPct)}</td><td class="num gold">${fmt(r.annualDiv)}</td>
+  </tr>`).join('');
+  const stockHtml = tbl(
+    `<th>Ticker</th><th>Név</th><th class="num">Db</th><th class="num">Átlag vételár</th><th class="num">Jelenlegi ár</th><th class="num">Befektetett</th><th class="num">Jelenlegi érték</th><th class="num">Eredmény</th><th class="num">Éves osztalék</th>`,
+    stockBody,
+    stockRows.length ? `<tr><td colspan="5">Összesen</td><td class="num">${fmt(stockCost)}</td><td class="num">${fmt(stockVal)}</td><td class="num">${pl(stockPL, stockCost?stockPL/stockCost*100:null)}</td><td class="num gold">${fmt(annualDiv)}</td></tr>` : ''
+  );
+
+  // Kripto
+  const cryptoBody = cryptoRows.map(r => `<tr>
+    <td><strong>${esc(r.coin)}</strong></td><td class="num">${fmtNum(r.qty)}</td><td class="num">${fmt(r.avgHuf)}</td>
+    <td class="num">${fmt(r.priceHuf)}</td><td class="num">${fmt(r.invHuf)}</td><td class="num">${fmt(r.curHuf)}</td><td class="num">${pl(r.pl, r.plPct)}</td>
+  </tr>`).join('');
+  const cryptoHtml = tbl(
+    `<th>Coin</th><th class="num">Db</th><th class="num">Átlag vételár</th><th class="num">Jelenlegi ár</th><th class="num">Befektetett</th><th class="num">Jelenlegi érték</th><th class="num">Eredmény</th>`,
+    cryptoBody,
+    cryptoRows.length ? `<tr><td colspan="4">Összesen</td><td class="num">${fmt(cryptoCost)}</td><td class="num">${fmt(cryptoVal)}</td><td class="num">${pl(cryptoPL, cryptoCost?cryptoPL/cryptoCost*100:null)}</td></tr>` : ''
+  );
+
+  // Hitelek
+  const loanBody = loanRows.map(r => `<tr>
+    <td>${esc(r.l.name||'—')}</td><td class="num">${fmt(r.l.orig)}</td><td class="num">${fmt(r.l.monthly)}</td>
+    <td class="num">${r.l.rate?r.l.rate+'%':'—'}</td><td class="num">${fmt(r.remaining)}</td><td class="num">${esc(r.l.end||'—')}</td>
+  </tr>`).join('');
+  const loanHtml = tbl(
+    `<th>Név</th><th class="num">Eredeti összeg</th><th class="num">Havi törlesztő</th><th class="num">Kamat</th><th class="num">Hátralévő tartozás</th><th class="num">Lejárat</th>`,
+    loanBody,
+    loanRows.length ? `<tr><td>Összesen</td><td class="num">${fmt(loanOrig)}</td><td class="num">${fmt(monthlyLoan)}</td><td></td><td class="num">${fmt(totalLoan)}</td><td></td></tr>` : ''
+  );
+
+  // Zálog
+  const pledgeBody = pledgeRows.map(r => `<tr>
+    <td>${esc(r.p.ticketNo||'—')}</td><td>${esc((r.p.goldNames&&r.p.goldNames.length)?r.p.goldNames.join(', '):'—')}</td>
+    <td class="num">${fmt(r.d.principal)}</td><td class="num">${fmt(r.d.cashReceived)}</td><td class="num">${fmt(r.d.currentDebt)}</td>
+    <td class="num">${fmt(r.d.totalRepay)}</td><td class="num">${esc(r.p.end||'—')}</td>
+  </tr>`).join('');
+  const pledgeHtml = tbl(
+    `<th>Zálogjegy</th><th>Fedezet</th><th class="num">Kölcsön</th><th class="num">Kézhez kapott</th><th class="num">Jelenlegi tartozás</th><th class="num">Visszafizetendő</th><th class="num">Lejárat</th>`,
+    pledgeBody,
+    pledgeRows.length ? `<tr><td colspan="2">Összesen</td><td class="num">${fmt(pledgePrincipal)}</td><td></td><td class="num">${fmt(totalPledge)}</td><td class="num">${fmt(pledgeRepay)}</td><td></td></tr>` : ''
+  );
+
+  // Szolgáltatások
+  const svcBody = svcRows.map(r => {
+    const cat = Array.isArray(r.s.cat) ? r.s.cat.join(', ') : (r.s.cat || '');
+    return `<tr>
+      <td>${esc(r.s.name||'—')}</td><td class="muted">${esc(cat||'—')}</td><td class="num">${fmt(r.s.amount)}</td>
+      <td>${esc(CYCLE_LABEL[r.s.cycle]||r.s.cycle||'—')}</td><td class="num">${fmt(r.monthly)}</td><td class="num">${r.next?r.next.toLocaleDateString('hu-HU'):'—'}</td>
+    </tr>`;
+  }).join('');
+  const svcHtml = tbl(
+    `<th>Név</th><th>Kategória</th><th class="num">Összeg</th><th>Ciklus</th><th class="num">Havi költség</th><th class="num">Köv. terhelés</th>`,
+    svcBody,
+    svcRows.length ? `<tr><td colspan="4">Havi összesen</td><td class="num">${fmt(svcMonthly)}</td><td class="num muted">${fmt(svcMonthly*12)}/év</td></tr>` : ''
+  );
+
+  const html = `<!doctype html><html lang="hu"><head><meta charset="utf-8">
+<title>VagyonMentor_penzugyi_kimutatas_${dateFile}</title>
+<style>
+*{box-sizing:border-box}
+body{font-family:-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:#1c1c1c;margin:0;background:#eceae4;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.doc{max-width:840px;margin:0 auto;background:#fff;padding:34px 40px}
+h1{font-size:22px;margin:0 0 2px}
+.brand{color:#b8873a;font-weight:700;letter-spacing:.5px;font-size:12px;text-transform:uppercase;margin-bottom:10px}
+.meta{color:#666;font-size:11.5px;margin-bottom:6px;line-height:1.6}
+h2{font-size:13px;text-transform:uppercase;letter-spacing:.6px;color:#b8873a;border-bottom:2px solid #e6e0d4;padding-bottom:6px;margin:28px 0 12px}
+table{width:100%;border-collapse:collapse;font-size:11.5px}
+th,td{text-align:left;padding:7px 8px;border-bottom:1px solid #efefef}
+th{color:#999;font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:.4px}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+tfoot td{font-weight:700;border-top:2px solid #ddd;border-bottom:none;background:#faf7f1}
+tr.subtotal td{font-weight:700;border-top:1px solid #ddd;background:#faf9f6}
+.pos{color:#1a7f4b}.neg{color:#b23b2e}.muted{color:#999}.gold{color:#b8873a}
+.summary{display:grid;grid-template-columns:repeat(2,1fr);gap:0 28px}
+.sum-item{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:9px 0;border-bottom:1px solid #f1f1f1;font-size:12.5px}
+.sum-item .lbl{color:#555}.sum-item .val{font-weight:700;white-space:nowrap}
+section{margin-bottom:6px}
+thead{display:table-header-group}
+tr{page-break-inside:avoid}
+footer{margin-top:30px;padding-top:12px;border-top:1px solid #eee;color:#999;font-size:10px;line-height:1.6}
+.toolbar{position:sticky;top:0;z-index:5;background:#222;color:#fff;padding:10px 16px;display:flex;gap:10px;align-items:center;font-size:12px;flex-wrap:wrap}
+.toolbar button{background:#b8873a;color:#fff;border:none;padding:8px 15px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600}
+.toolbar .sec{background:#444}
+.toolbar span{color:#bbb;margin-left:auto}
+@media print{body{background:#fff}.no-print{display:none!important}.doc{max-width:none;padding:0}@page{size:A4;margin:14mm}}
+</style></head>
+<body>
+<div class="toolbar no-print">
+  <button onclick="window.print()">PDF mentése / Nyomtatás</button>
+  <button class="sec" onclick="window.close()">Bezárás</button>
+  <span>A nyomtatási ablakban válaszd célként a „PDF mentése" opciót.</span>
+</div>
+<div class="doc">
+  <div class="brand">VagyonMentor</div>
+  <h1>Pénzügyi kimutatás</h1>
+  <div class="meta">
+    Készült: ${esc(genStr)}${acctName?` &nbsp;·&nbsp; ${esc(acctName)}`:''}${acctEmail?` &nbsp;·&nbsp; ${esc(acctEmail)}`:''}<br>
+    Minden érték HUF-ban, a ${priceNote}. A részvény- és kriptoárfolyamok HUF-ra átváltva.
+  </div>
+
+  <section><h2>Összefoglaló</h2>${summaryHtml}</section>
+  <section><h2>Vagyonmegoszlás</h2>${allocHtml}</section>
+  <section><h2>Arany</h2>${goldHtml}</section>
+  <section><h2>Részvények</h2>${stockHtml}</section>
+  <section><h2>Kripto</h2>${cryptoHtml}</section>
+  <section><h2>Hitelek</h2>${loanHtml}</section>
+  <section><h2>Zálog</h2>${pledgeHtml}</section>
+  <section><h2>Előfizetések / szolgáltatások</h2>${svcHtml}</section>
+
+  <footer>
+    Ez a kimutatás tájékoztató jellegű, a VagyonMentor alkalmazásban rögzített adatokból és az utolsó lekért árfolyamokból készült. Nem minősül pénzügyi tanácsadásnak vagy hivatalos elszámolásnak. A pontos, naprakész értékekért frissítsd az élő árfolyamokat a kimutatás előtt.
+  </footer>
+</div>
+</body></html>`;
+
+  const w = window.open('', '_blank');
+  if (!w) { alert('A kimutatás megnyitásához engedélyezd a felugró ablakokat ehhez az oldalhoz.'); return; }
+  w.document.open();
+  w.document.write(html);
+  w.document.close();
+  w.focus();
+  // rövid késleltetés, hogy a tartalom biztosan elrendeződjön a nyomtatás előtt
+  setTimeout(() => { try { w.print(); } catch(e){} }, 450);
+}
+
 function importData(input) {
   const file = input.files && input.files[0];
   if (!file) return;
@@ -548,6 +808,14 @@ async function refreshAllPrices() {
     Object.entries(prices).forEach(([ticker, price]) => {
       priceCache[ticker] = { price, updatedAt: new Date().toLocaleTimeString('hu-HU') };
     });
+    // Hiányzó teljes nevek pótlása coinonként (a részvények mintájára)
+    for (const sym of cryptoTickers) {
+      const hasName = state.crypto.some(c => c.coin.toUpperCase() === sym && c.name);
+      if (!hasName) {
+        const nm = await resolveCryptoName(sym);
+        if (nm) state.crypto.forEach(c => { if (c.coin.toUpperCase() === sym && !c.name) c.name = nm; });
+      }
+    }
   }
 
   const failedTickers = [];
@@ -966,7 +1234,7 @@ function renderStocks() {
   document.getElementById('stock-refresh-bar').innerHTML = '';
 
   if (!state.stocks.length) {
-    tbody.innerHTML = '<tr><td colspan="11" style="color:var(--muted);text-align:center;padding:20px">Nincs részvény</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="10" style="color:var(--muted);text-align:center;padding:20px">Nincs részvény</td></tr>';
     document.getElementById('st-sum-invested').textContent = fmt(0);
     document.getElementById('st-sum-current').textContent = fmt(0);
     const plEl0 = document.getElementById('st-sum-pl');
@@ -1028,7 +1296,6 @@ function renderStocks() {
         <td class="${g.plN>=0?'green':'red'}" style="font-weight:500">${g.plN>=0?'+':''}${fmtCur(g.plN, g.cur)} <span style="font-size:10px">(${g.plPct.toFixed(1)}%)</span></td>
         <td class="yellow">${fmtCur(g.annualDivN, g.cur)}</td>
         <td>${g.divYield.toFixed(2)}%${s.divAuto ? ' <span style="font-size:9px;color:var(--accent2)" title="Automatikusan a Yahoo-ról">auto</span>' : ''}</td>
-        <td><button class="btn btn-sm" onclick="event.stopPropagation(); ${g.lots.length === 1 ? `openStockSell('${g.lots[0].id}')` : `openStockDetail('${g.ticker}')`}">Eladás</button></td>
       </tr>
     `;
   }).join('');
@@ -1155,6 +1422,16 @@ function closeStockDetail() {
   if (addBtn) addBtn.style.display = '';
 }
 
+function sellCurrentStock() {
+  if (!_openStockTicker) return;
+  // A legrégebbi nyitott tételt kínáljuk fel eladásra (FIFO); több tétel esetén
+  // a következő eladáskor a soron következő legrégebbi jön
+  const lots = state.stocks
+    .filter(s => s.ticker === _openStockTicker)
+    .sort((a, b) => (a.buyDate || '').localeCompare(b.buyDate || ''));
+  if (lots.length) openStockSell(lots[0].id);
+}
+
 function buildStockDetailHTML(ticker) {
   const lots = state.stocks.filter(s => s.ticker === ticker);
   if (!lots.length) return '';
@@ -1181,7 +1458,7 @@ function buildStockDetailHTML(ticker) {
       <td>${fmtCur(invN, cur)}</td>
       <td class="cyan">${fmtCur(curN, cur)}</td>
       <td class="${plN>=0?'green':'red'}">${plN>=0?'+':''}${fmtCur(plN, cur)} <span style="font-size:10px">(${plPct.toFixed(1)}%)</span></td>
-      <td><button class="btn btn-sm" onclick="openStockSell('${l.id}')">Eladás</button></td>
+      <td><button class="btn btn-sm btn-secondary" onclick="deleteStock('${l.id}')">Téves rögzítés</button></td>
     </tr>`;
   }).join('');
 
@@ -1206,7 +1483,7 @@ function buildStockDetailHTML(ticker) {
       <div style="color:var(--muted);font-size:12px;margin-bottom:18px">${first.name?escHtml(first.name)+' &nbsp;|&nbsp; ':''}${lots.length} vétel &nbsp;|&nbsp; ${cur}</div>
 
       <div class="grid g4" style="margin-bottom:20px">
-        ${box('Összes darab', fmtNum(totQty))}
+        ${box('Összes mennyiség', fmtNum(totQty))}
         ${box('Befektetett', fmtCur(totInvN, cur))}
         ${box('P&L', `${totPLN>=0?'+':''}${fmtCur(totPLN, cur)} (${totPLPct.toFixed(1)}%)`, totPLN>=0?'green':'red')}
         ${box('Éves osztalék', fmt(annualDivHuf), 'yellow')}
@@ -1230,9 +1507,25 @@ function buildStockDetailHTML(ticker) {
   `;
 }
 
+async function resolveCryptoName(coin) {
+  const sym = (coin || '').trim().toUpperCase();
+  if (!sym) return '';
+  try {
+    const r = await fetch(`https://api.coingecko.com/api/v3/search?query=${encodeURIComponent(sym)}`);
+    const data = await r.json();
+    const coins = (data && data.coins) || [];
+    const knownId = COINGECKO_ID_MAP[sym];
+    // 1) ha ismerjük a CoinGecko id-t, azt keressük; 2) pontos szimbólum-egyezés
+    // (a találatok piaci kap. szerint rendezettek); 3) végül az első találat
+    let best = knownId ? coins.find(c => c.id === knownId) : null;
+    if (!best) best = coins.find(c => (c.symbol || '').toUpperCase() === sym);
+    if (!best) best = coins[0];
+    return best ? (best.name || '') : '';
+  } catch (e) { return ''; }
+}
+
 async function addCryptoTrade() {
   const coin = document.getElementById('cr-coin').value.trim().toUpperCase();
-  const name = (document.getElementById('cr-name').value || '').trim();
   const type = 'buy';
   const currency = document.getElementById('cr-currency').value;
   const qty = parseFloat(document.getElementById('cr-qty').value)||0;
@@ -1240,12 +1533,14 @@ async function addCryptoTrade() {
   const feeNative = parseFloat(document.getElementById('cr-fee').value)||0;
   const date = document.getElementById('cr-date').value || now();
   if (!coin || !qty || !priceNative) return;
+  // Teljes név automatikus lekérése a coin szimbólumából (a részvények mintájára)
+  const name = await resolveCryptoName(coin);
   const fxRate = await fxRateForDate(currency, date);
   const price = priceNative * fxRate;
   const fee = feeNative * fxRate;
   state.crypto.push({ id:uid(), coin, name, type, qty, price, date, fee, currency });
   save();
-  ['cr-coin','cr-name','cr-qty','cr-price','cr-fee'].forEach(id=>document.getElementById(id).value='');
+  ['cr-coin','cr-qty','cr-price','cr-fee'].forEach(id=>document.getElementById(id).value='');
   closeModal('crypto-modal');
   renderAll();
 }
@@ -1377,20 +1672,24 @@ function renderCrypto() {
     liveOpenEl.innerHTML = `<div class="stat-value cyan">${fmt(totalLiveOpen)}</div>`;
   }
 
-  // Coin → teljes név / deviza / legutóbbi vétel dátuma
-  const nameMap = {}, coinCur = {}, coinLastDate = {};
+  // Coin → teljes név / deviza / legutóbbi vétel dátuma / vételek száma
+  const nameMap = {}, coinCur = {}, coinLastDate = {}, coinBuyCount = {};
   state.crypto.forEach(t => {
     if (t.name) nameMap[t.coin] = t.name;
     if (!coinCur[t.coin]) coinCur[t.coin] = t.currency || 'HUF';
-    if (t.type === 'buy' && (!coinLastDate[t.coin] || (t.date||'') > coinLastDate[t.coin])) coinLastDate[t.coin] = t.date || '';
+    if (t.type === 'buy') {
+      coinBuyCount[t.coin] = (coinBuyCount[t.coin] || 0) + 1;
+      if (!coinLastDate[t.coin] || (t.date||'') > coinLastDate[t.coin]) coinLastDate[t.coin] = t.date || '';
+    }
   });
 
   // PORTFÓLIÓ — coinonként aggregált pozíció, saját devizanemben (a részvények mintájára)
   const holdingsBody = document.getElementById('crypto-holdings-tbody');
   if (holdingsBody) {
-    holdingsBody.innerHTML = Object.entries(coins).map(([coin, c]) => {
+    // Nyitott pozíciók coinonként, jelenlegi érték szerint csökkenő sorrendben (a részvények mintájára)
+    const rows = Object.entries(coins).map(([coin, c]) => {
       const openQty = c.buys.reduce((a,b)=>a+b.qty,0);
-      if (openQty <= 0) return '';
+      if (openQty <= 0) return null;
       const openCostHuf = c.buys.reduce((a,b)=>a+b.qty*b.price,0);
       const liveHuf = getLivePrice(coin);
       const curPriceHuf = liveHuf || (openCostHuf / openQty);
@@ -1405,18 +1704,21 @@ function renderCrypto() {
       const plN = curValN - openCostN;
       const plPct = openCostN ? plN/openCostN*100 : 0;
 
-      return `<tr>
-        <td><strong>${coin}</strong>${nameMap[coin]?`<div style="font-size:10px;color:var(--muted)">${escHtml(nameMap[coin])}</div>`:''}</td>
-        <td style="color:var(--muted)">${coinLastDate[coin]||'—'}</td>
-        <td>${fmtNum(openQty)}</td>
-        <td>${fmtCur(avgN, cur)}</td>
-        <td>${fmtCur(curPriceN, cur)}</td>
-        <td>${fmtCur(openCostN, cur)}</td>
-        <td><strong>${fmtCur(curValN, cur)}</strong></td>
-        <td class="${plN>=0?'green':'red'}" style="font-weight:500">${plN>=0?'+':''}${fmtCur(plN, cur)} <span style="font-size:10px">(${plPct.toFixed(1)}%)</span></td>
-        <td><button class="btn btn-sm" onclick="openSellModal('${coin}')">Eladás</button></td>
-      </tr>`;
-    }).join('') || '<tr><td colspan="9" style="color:var(--muted);text-align:center;padding:20px">Nincs kriptó pozíció</td></tr>';
+      return { coin, openQty, avgN, curPriceN, openCostN, curValN, plN, plPct, cur, curValHuf };
+    }).filter(Boolean).sort((a,b) => b.curValHuf - a.curValHuf);
+
+    holdingsBody.innerHTML = rows.map(r => `<tr style="cursor:pointer" onclick="openCryptoDetail('${r.coin}')">
+        <td>
+          <strong>${r.coin}</strong>${nameMap[r.coin]?`<div style="font-size:10px;color:var(--muted)">${escHtml(nameMap[r.coin])}</div>`:''}
+          <div style="font-size:10px;color:var(--muted);margin-top:2px">${coinBuyCount[r.coin]||0} vétel ›</div>
+        </td>
+        <td>${fmtNum(r.openQty)}</td>
+        <td>${fmtCur(r.avgN, r.cur)}</td>
+        <td>${fmtCur(r.curPriceN, r.cur)}</td>
+        <td>${fmtCur(r.openCostN, r.cur)}</td>
+        <td><strong>${fmtCur(r.curValN, r.cur)}</strong></td>
+        <td class="${r.plN>=0?'green':'red'}" style="font-weight:500">${r.plN>=0?'+':''}${fmtCur(r.plN, r.cur)} <span style="font-size:10px">(${r.plPct.toFixed(1)}%)</span></td>
+      </tr>`).join('') || '<tr><td colspan="7" style="color:var(--muted);text-align:center;padding:20px">Nincs kriptó pozíció</td></tr>';
   }
 
   // Hozam — a nyitott pozíció megtérülése
@@ -1455,17 +1757,24 @@ function renderCrypto() {
       allocEl.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:10px 0">Nincs nyitott pozíció</div>';
     } else {
       const palette = ['#C08A2E','#3FA36C','#4FA7BD','#8B6690','#C24A3A','#B8873A','#6E8B3D','#B0703A'];
-      allocEl.innerHTML = [...coinStats].sort((a,b)=>b.curVal-a.curVal).map((s,i)=>{
+      // Oszlopok száma a rögzített kriptók száma szerint:
+      // 5-nél több → 2 oszlop (szélesebb, olvashatóbb sávok); 1-nél több → 3 oszlop; egyébként 1
+      const n = coinStats.length;
+      const cols = n > 5 ? 2 : (n > 1 ? 3 : 1);
+      const colCls = cols === 2 ? 'g2' : (cols === 3 ? 'g3' : '');
+      const gridStyle = 'gap:11px 18px' + (cols === 1 ? ';grid-template-columns:1fr' : '');
+      allocEl.innerHTML = `<div class="grid ${colCls}" style="${gridStyle}">` +
+        [...coinStats].sort((a,b)=>b.curVal-a.curVal).map((s,i)=>{
         const color = palette[i % palette.length];
         const share = s.curVal/totalVal*100;
-        return `<div style="margin-bottom:11px">
+        return `<div>
           <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;margin-bottom:4px">
             <span><strong style="color:${color}">${s.coin}</strong> <span style="color:var(--muted)">${share.toFixed(1)}%</span></span>
             <span class="cyan" style="font-weight:600">${fmt(s.curVal)}</span>
           </div>
           <div class="progress-bar" style="height:6px"><div class="progress-fill" style="width:${share}%;background:${color}"></div></div>
         </div>`;
-      }).join('');
+      }).join('') + `</div>`;
     }
   }
 
@@ -1487,6 +1796,141 @@ function renderCrypto() {
       `;
     }
   }
+
+  // Ha nyitva van egy kripto részletnézete, frissítjük (a részvények mintájára)
+  if (_openCryptoCoin) {
+    const dv = document.getElementById('crypto-detail-view');
+    if (dv && dv.style.display !== 'none') {
+      const stillOpen = state.crypto.some(t => t.coin === _openCryptoCoin && t.type === 'buy');
+      if (stillOpen) {
+        const c = document.getElementById('crypto-detail-content');
+        if (c) c.innerHTML = buildCryptoDetailHTML(_openCryptoCoin);
+      } else {
+        closeCryptoDetail();
+      }
+    }
+  }
+}
+
+let _openCryptoCoin = null;
+
+function openCryptoDetail(coin) {
+  if (!state.crypto.some(t => t.coin === coin)) return;
+  _openCryptoCoin = coin;
+  const lv = document.getElementById('crypto-list-view');
+  const dv = document.getElementById('crypto-detail-view');
+  const addBtn = document.getElementById('crypto-add-btn');
+  if (lv) lv.style.display = 'none';
+  if (dv) dv.style.display = 'block';
+  if (addBtn) addBtn.style.display = 'none';
+  const c = document.getElementById('crypto-detail-content');
+  if (c) c.innerHTML = buildCryptoDetailHTML(coin);
+}
+
+function closeCryptoDetail() {
+  _openCryptoCoin = null;
+  const lv = document.getElementById('crypto-list-view');
+  const dv = document.getElementById('crypto-detail-view');
+  const addBtn = document.getElementById('crypto-add-btn');
+  if (lv) lv.style.display = 'block';
+  if (dv) dv.style.display = 'none';
+  if (addBtn) addBtn.style.display = '';
+}
+
+function sellCurrentCrypto() {
+  if (_openCryptoCoin) openSellModal(_openCryptoCoin);
+}
+
+function buildCryptoDetailHTML(coin) {
+  const trades = state.crypto.filter(t => t.coin === coin);
+  if (!trades.length) return '';
+
+  // Nyitott pozíció FIFO szerint (a részvény-részletnézet mintájára)
+  const c = calcCryptoPL()[coin] || { buys: [], realized: 0, fees: 0 };
+  const openQty = c.buys.reduce((a,b)=>a+b.qty,0);
+  const openCostHuf = c.buys.reduce((a,b)=>a+b.qty*b.price,0);
+  const liveHuf = getLivePrice(coin);
+  const curPriceHuf = liveHuf || (openQty ? openCostHuf/openQty : 0);
+  const curValHuf = openQty * curPriceHuf;
+
+  const cur = (trades.find(t=>t.currency)||{}).currency || 'HUF';
+  const rate = rateForCurrency(cur);
+  const toN = v => rate ? v/rate : v;
+
+  const openCostN = toN(openCostHuf);
+  const avgN = openQty ? openCostN/openQty : 0;
+  const curPriceN = toN(curPriceHuf);
+  const curValN = toN(curValHuf);
+  const openPLN = curValN - openCostN;
+  const openPLPct = openCostN ? openPLN/openCostN*100 : 0;
+
+  const name = (trades.find(t=>t.name)||{}).name || '';
+  const liveBadge = liveHuf ? '<span class="badge badge-green">● élő</span>' : '';
+  const box = (label, val, cls) => `<div><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:4px">${label}</div><div class="${cls||''}" style="font-family:var(--display);font-size:16px;font-weight:700">${val}</div></div>`;
+
+  // Nyitott vételi tételek FIFO-remainder szerint, dátummal (a részvény "Vételek" táblázat mintájára)
+  const lots = [];
+  [...trades].sort((a,b)=>(a.date||'').localeCompare(b.date||'')).forEach(t => {
+    if (t.type === 'buy') {
+      lots.push({ id: t.id, qty: t.qty, price: t.price, date: t.date });
+    } else {
+      let rem = t.qty;
+      while (rem > 1e-12 && lots.length) {
+        const lot = lots[0];
+        const used = Math.min(rem, lot.qty);
+        lot.qty -= used;
+        rem -= used;
+        if (lot.qty <= 1e-12) lots.shift();
+      }
+    }
+  });
+
+  const lotsHtml = lots.map(l => {
+    const priceN = toN(l.price);
+    const invN = toN(l.qty * l.price);
+    const valN = toN(l.qty * curPriceHuf);
+    const plN = valN - invN;
+    const plPct = invN ? plN/invN*100 : 0;
+    return `<tr>
+      <td style="color:var(--muted)">${l.date||'—'}</td>
+      <td>${fmtNum(l.qty)}</td>
+      <td>${fmtCur(priceN, cur)}</td>
+      <td>${fmtCur(invN, cur)}</td>
+      <td class="cyan">${fmtCur(valN, cur)}</td>
+      <td class="${plN>=0?'green':'red'}">${plN>=0?'+':''}${fmtCur(plN, cur)} <span style="font-size:10px">(${plPct.toFixed(1)}%)</span></td>
+      <td><button class="btn btn-sm btn-secondary" onclick="deleteCryptoTrade('${l.id}')">Téves rögzítés</button></td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="7" style="color:var(--muted);text-align:center;padding:16px">Nincs nyitott vétel</td></tr>';
+
+  return `
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:4px">
+        <div style="font-family:var(--display);font-size:20px;font-weight:700">${coin}</div>
+        ${liveBadge}
+      </div>
+      <div style="color:var(--muted);font-size:12px;margin-bottom:18px">${name?escHtml(name)+' &nbsp;|&nbsp; ':''}${lots.length} vétel &nbsp;|&nbsp; ${cur}</div>
+
+      <div class="grid g4" style="margin-bottom:20px">
+        ${box('Összes mennyiség', fmtNum(openQty))}
+        ${box('Befektetett', fmtCur(openCostN, cur))}
+        ${box('Jelenlegi érték', fmtCur(curValN, cur), 'cyan')}
+        ${box('P&L', `${openPLN>=0?'+':''}${fmtCur(openPLN, cur)} (${openPLPct.toFixed(1)}%)`, openPLN>=0?'green':'red')}
+      </div>
+
+      <div style="display:flex;flex-wrap:wrap;gap:20px;font-size:12px;margin-bottom:20px;padding-top:16px;border-top:1px solid var(--border)">
+        <div><span style="color:var(--muted)">Átlag vételár: </span><strong>${fmtCur(avgN, cur)}</strong></div>
+        <div><span style="color:var(--muted)">Jelenlegi ár: </span><strong>${fmtCur(curPriceN, cur)}</strong></div>
+      </div>
+
+      <div class="card-title" style="margin-bottom:12px">Vételek</div>
+      <div class="scroll-table">
+        <table>
+          <thead><tr><th>Vétel dátuma</th><th>Db</th><th>Vételár</th><th>Befektetett</th><th>Jelenlegi érték</th><th>P&amp;L</th><th></th></tr></thead>
+          <tbody>${lotsHtml}</tbody>
+        </table>
+      </div>
+    </div>
+  `;
 }
 
 function calcLoanEndDate() {

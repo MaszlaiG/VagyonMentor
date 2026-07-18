@@ -192,7 +192,7 @@
           <div id="stock-refresh-bar"></div>
           <div class="scroll-table">
             <table>
-              <thead><tr><th>Ticker</th><th>Típus</th><th>Db</th><th>Átlag vételár</th><th>Jelenlegi ár</th><th>Befektetett</th><th>Jelenlegi érték</th><th>P&amp;L</th><th>Éves Osztalék</th><th>Osztalék</th><th></th></tr></thead>
+              <thead><tr><th>Ticker</th><th>Típus</th><th>Db</th><th>Átlag vételár</th><th>Jelenlegi ár</th><th>Befektetett</th><th>Jelenlegi érték</th><th>P&amp;L</th><th>Éves Osztalék</th><th>Osztalék</th></tr></thead>
               <tbody id="stock-tbody"></tbody>
             </table>
           </div>
@@ -200,8 +200,9 @@
       </div>
 
       <div id="stock-detail-view" style="display:none">
-        <div style="margin-bottom:16px">
+        <div style="margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
           <button class="btn btn-secondary" onclick="closeStockDetail()">← Vissza a részvényekhez</button>
+          <button class="btn" onclick="sellCurrentStock()">Eladás</button>
         </div>
         <div id="stock-detail-content"></div>
       </div>
@@ -281,13 +282,12 @@
 <div class="tab-content" id="tab-crypto">
   <div class="section-header">
     <div class="section-title">Kriptovaluta Kereskedés</div>
-    <button class="btn" onclick="openModal('crypto-modal')">+ Vétel rögzítése</button>
+    <button class="btn" id="crypto-add-btn" onclick="openModal('crypto-modal')">+ Vétel rögzítése</button>
   </div>
 
   <div>
     <div>
-      <div id="crypto-refresh-bar"></div>
-
+      <div id="crypto-list-view">
       <div class="grid g4" style="margin-bottom:16px">
         <div class="card card-stat-cyan">
           <div class="card-title">Bekerülési érték (nyitott)</div>
@@ -308,17 +308,7 @@
         </div>
       </div>
 
-      <div class="card">
-        <div class="card-title">Portfólió</div>
-        <div class="scroll-table">
-          <table>
-            <thead><tr><th>Coin</th><th>Vétel dátuma</th><th>Db</th><th>Vételár</th><th>Jelenlegi ár</th><th>Befektetett</th><th>Jelenlegi érték</th><th>P&amp;L</th><th></th></tr></thead>
-            <tbody id="crypto-holdings-tbody"></tbody>
-          </table>
-        </div>
-      </div>
-
-      <div class="grid g2" style="margin-top:16px">
+      <div class="grid g2" style="margin-bottom:16px">
         <div class="card">
           <div class="card-title">Kripto Megoszlás</div>
           <div id="crypto-allocation"></div>
@@ -327,6 +317,26 @@
           <div class="card-title">Statisztika</div>
           <div id="crypto-stats"></div>
         </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Portfólió</div>
+        <div id="crypto-refresh-bar"></div>
+        <div class="scroll-table">
+          <table>
+            <thead><tr><th>Coin</th><th>Db</th><th>Átlag vételár</th><th>Jelenlegi ár</th><th>Befektetett</th><th>Jelenlegi érték</th><th>P&amp;L</th></tr></thead>
+            <tbody id="crypto-holdings-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+      </div>
+
+      <div id="crypto-detail-view" style="display:none">
+        <div style="margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+          <button class="btn btn-secondary" onclick="closeCryptoDetail()">← Vissza a kriptókhoz</button>
+          <button class="btn" onclick="sellCurrentCrypto()">Eladás</button>
+        </div>
+        <div id="crypto-detail-content"></div>
       </div>
     </div>
 
@@ -337,13 +347,9 @@
           <button class="btn btn-secondary btn-sm" onclick="closeModal('crypto-modal')">✕</button>
         </div>
         <div class="form-grid fg2" style="margin-bottom:12px">
-          <div>
+          <div style="grid-column:1 / -1">
             <label>Coin</label>
             <input type="text" id="cr-coin" placeholder="BTC, ETH, ...">
-          </div>
-          <div>
-            <label>Teljes név (opcionális)</label>
-            <input type="text" id="cr-name" placeholder="pl. Bitcoin">
           </div>
           <div>
             <label>Deviza</label>
@@ -373,6 +379,7 @@
         <div id="cr-fx-info" style="font-size:11px;color:var(--muted);margin-bottom:12px;display:none">
           Az ár és a díj a <strong>vétel dátumához</strong> tartozó (történeti) árfolyammal lesz HUF-ra váltva. Mai árfolyam: 1 <span id="cr-fx-cur">USD</span> ≈ <span id="cr-fx-rate">360</span> Ft
         </div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:10px">A teljes nevet és az élő árfolyamot a rendszer a coin szimbóluma alapján automatikusan lekéri (CoinGecko).</div>
         <button class="btn" onclick="addCryptoTrade()" style="width:100%">+ Vétel rögzítése</button>
       </div>
     </div>
@@ -867,8 +874,16 @@
     </div>
 
 
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-title">Pénzügyi kimutatás</div>
+      <p style="color:var(--muted);font-size:12px;margin-bottom:16px;line-height:1.6">
+        Részletes kimutatás a teljes vagyonodról — nettó vagyon, eszközmegoszlás, valamint arany, részvény, kripto, hitel, zálog és előfizetés bontás, eredménnyel (P&amp;L). A megnyíló nyomtatási ablakban válaszd célként a „PDF mentése" opciót. Tipp: előtte frissítsd az élő árfolyamokat a pontos értékekért.
+      </p>
+      <button class="btn" onclick="generateFinancialReport()" style="width:100%">📄 Kimutatás generálása (PDF)</button>
+    </div>
+
+
     <div class="grid g2" style="margin-bottom:16px">
-      <!-- ADATKEZELÉS -->
       <div class="card">
         <div class="card-title">Adatok</div>
         <div style="display:flex;flex-direction:column;gap:10px">
