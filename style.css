@@ -391,6 +391,12 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); box-sh
 select option { background: var(--surface); }
 input[readonly] { background: var(--surface2); color: var(--muted); }
 
+/* Használt oldalak – modul kapcsolók */
+.mod-toggle { display: flex; align-items: center; gap: 9px; padding: 11px 13px; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 500; user-select: none; transition: border-color 0.15s, background 0.15s; }
+.mod-toggle:hover { border-color: var(--accent3); }
+.mod-toggle input { width: 17px; height: 17px; accent-color: var(--accent); flex-shrink: 0; cursor: pointer; margin: 0; }
+.mod-toggle:has(input:checked) { border-color: var(--accent); background: var(--surface); }
+
 /* Lenyitható aranytétel-választó (1 soros vezérlő, nyitva overlay lista) */
 .pl-gold-dd { position: relative; }
 .pl-gold-dd > summary {

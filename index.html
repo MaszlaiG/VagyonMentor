@@ -121,6 +121,11 @@
     </div>
   </div>
 
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-title">Osztalék adózása (becsült)</div>
+    <div id="d-div-tax"></div>
+  </div>
+
   <div class="grid g21" style="margin-bottom:24px">
     <div class="card">
       <div class="card-title">Osztalék Naptár</div>
@@ -179,6 +184,7 @@
           <div class="card card-stat-yellow">
             <div class="card-title">Éves osztalék</div>
             <div class="stat-value yellow" id="st-sum-div">0 Ft</div>
+            <div class="stat-sub" id="st-sum-div-net">Nettó érték: 0 Ft</div>
           </div>
         </div>
 
@@ -877,6 +883,50 @@
         </div>
         <div id="acc-pass-msg" style="min-height:18px;font-size:12px;margin-bottom:12px"></div>
         <button class="btn" onclick="updatePassword()">Jelszó módosítása</button>
+      </div>
+    </div>
+
+
+    <div class="grid g2" style="margin-bottom:16px">
+      <!-- HASZNÁLT OLDALAK -->
+      <div class="card">
+        <div class="card-title">Használt oldalak</div>
+        <p style="color:var(--muted);font-size:12px;margin-bottom:16px;line-height:1.6">
+          Kapcsold ki azokat az eszköztípusokat, amiket nem használsz — a hozzájuk tartozó fül eltűnik a menüből. Az adatok nem törlődnek, bármikor visszakapcsolhatod.
+        </p>
+        <div class="form-grid fg2" style="gap:10px">
+          <label class="mod-toggle"><input type="checkbox" id="mod-gold" onchange="updateModules()"><span>Arany</span></label>
+          <label class="mod-toggle"><input type="checkbox" id="mod-stocks" onchange="updateModules()"><span>Részvény</span></label>
+          <label class="mod-toggle"><input type="checkbox" id="mod-crypto" onchange="updateModules()"><span>Kripto</span></label>
+          <label class="mod-toggle"><input type="checkbox" id="mod-pledge" onchange="updateModules()"><span>Zálog</span></label>
+          <label class="mod-toggle"><input type="checkbox" id="mod-loans" onchange="updateModules()"><span>Hitel</span></label>
+          <label class="mod-toggle"><input type="checkbox" id="mod-services" onchange="updateModules()"><span>Szolgáltatások</span></label>
+        </div>
+        <div id="acc-mod-msg" style="min-height:18px;font-size:12px;margin-top:10px"></div>
+      </div>
+
+      <!-- ADÓZÁSI ADATOK -->
+      <div class="card">
+        <div class="card-title">Adózási adatok</div>
+        <p style="color:var(--muted);font-size:12px;margin-bottom:16px;line-height:1.6">
+          Add meg az adókulcsokat százalékban. Ezeket a rendszer a későbbi adószámításokhoz használja majd.
+        </p>
+        <div class="form-grid" style="margin-bottom:16px">
+          <div>
+            <label>USA forrásadó (%)</label>
+            <input type="number" id="acc-tax-us" placeholder="0" step="0.01" min="0">
+          </div>
+          <div>
+            <label>Személyi jövedelemadó – SZJA (%)</label>
+            <input type="number" id="acc-tax-szja" placeholder="0" step="0.01" min="0">
+          </div>
+          <div>
+            <label>Szociális hozzájárulási adó – SZOCHO (%)</label>
+            <input type="number" id="acc-tax-szocho" placeholder="0" step="0.01" min="0">
+          </div>
+        </div>
+        <div id="acc-tax-msg" style="min-height:18px;font-size:12px;margin-bottom:12px"></div>
+        <button class="btn" onclick="updateTaxSettings()">Adókulcsok mentése</button>
       </div>
     </div>
 
