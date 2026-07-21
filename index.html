@@ -52,12 +52,12 @@
     <div style="color:var(--muted);font-size:12px">Minden eszköz és kötelezettség egy helyen</div>
   </div>
 
-  <div class="grid g4" style="margin-bottom:16px">
-    <div class="card card-stat-green">
+  <div class="grid g4" id="d-stat-grid" style="margin-bottom:16px">
+    <div class="card card-stat-green" id="d-networth-card">
       <div class="card-title">Nettó Vagyon</div>
       <div class="stat-value green" id="d-networth">0 Ft</div>
     </div>
-    <div class="card card-stat-cyan">
+    <div class="card card-stat-cyan" id="d-current-card">
       <div class="card-title">Befektetett Eszközök Értéke</div>
       <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
         <div class="stat-value cyan" id="d-current-value">0 Ft</div>
@@ -65,7 +65,7 @@
       </div>
       <div class="stat-sub" id="d-invested-line">Befektetve: 0 Ft</div>
     </div>
-    <div class="card card-stat-yellow">
+    <div class="card card-stat-yellow" id="d-div-rate-card">
       <div class="card-title">Osztalék Ráta</div>
       <div class="stat-value yellow" id="d-div-rate">0%</div>
       <div class="stat-sub" id="d-div-rate-sub">A havi fix kiadások fedezete osztalékból</div>
@@ -77,26 +77,26 @@
     </div>
   </div>
 
-  <div class="dash-span-grid">
+  <div class="dash-span-grid" id="d-span-grid">
     <div class="card card-stat-dark" id="d-unreal-card">
       <div class="card-title">Nem Realizált P&amp;L</div>
       <div class="stat-value" id="d-unreal-pl">0 Ft</div>
       <div class="stat-sub" id="d-unreal-pl-sub"></div>
     </div>
-    <div class="card card-stat-red">
+    <div class="card card-stat-red" id="d-liab-card">
       <div class="card-title">Összes Kötelezettség</div>
       <div class="stat-value red" id="d-total-liab">0 Ft</div>
       <div class="stat-sub" id="d-total-liab-sub"></div>
     </div>
-    <div class="card">
+    <div class="card" id="d-upcoming-card">
       <div class="card-title">Közelgő Kiadások</div>
       <div id="quick-status" class="scroll-y-fade" style="max-height:260px;overflow-y:auto"></div>
     </div>
-    <div class="card" style="border-color:rgba(245,158,11,0.4);box-shadow:0 0 0 1px rgba(245,158,11,0.15)">
+    <div class="card" id="d-monthly-card" style="border-color:rgba(245,158,11,0.4);box-shadow:0 0 0 1px rgba(245,158,11,0.15)">
       <div class="card-title" style="color:var(--accent3)">Havi Kiadás</div>
       <div id="dash-monthly"></div>
     </div>
-    <div class="card dash-donut-span">
+    <div class="card dash-donut-span" id="d-donut-card">
       <div class="card-title">Vagyonmegoszlás</div>
       <div class="donut-wrap">
         <canvas id="donut-canvas" width="140" height="140"></canvas>
@@ -105,8 +105,8 @@
     </div>
   </div>
 
-  <div class="grid g2" style="margin-bottom:16px">
-    <div class="card">
+  <div class="grid g2" id="d-mid-grid" style="margin-bottom:16px">
+    <div class="card" id="d-breakdown-card">
       <div class="card-title">Eszközbontás</div>
       <div class="scroll-table">
         <table>
@@ -115,23 +115,23 @@
         </table>
       </div>
     </div>
-    <div class="card">
+    <div class="card" id="d-cashflow-card">
       <div class="card-title">Havi Pénzáramlás</div>
       <div id="d-cashflow"></div>
     </div>
   </div>
 
-  <div class="card" style="margin-bottom:16px">
+  <div class="card" id="d-div-tax-card" style="margin-bottom:16px">
     <div class="card-title">Osztalék adózása (becsült)</div>
     <div id="d-div-tax"></div>
   </div>
 
-  <div class="grid g21" style="margin-bottom:24px">
-    <div class="card">
+  <div class="grid g21" id="d-bottom-grid" style="margin-bottom:24px">
+    <div class="card" id="d-div-cal-card">
       <div class="card-title">Osztalék Naptár</div>
       <div id="div-calendar-dash"></div>
     </div>
-    <div class="card">
+    <div class="card" id="d-top-card">
       <div class="card-title">Legnagyobb Pozíciók</div>
       <div id="d-top-holdings"></div>
     </div>
@@ -146,17 +146,25 @@
 
   <div id="watch-refresh-bar"></div>
 
-  <div class="section-title" style="font-size:14px;margin-bottom:12px">Kripto</div>
-  <div id="dash-crypto" class="grid watch-grid" style="margin-bottom:24px"></div>
+  <div class="watch-section" data-watch-module="crypto">
+    <div class="section-title" style="font-size:14px;margin-bottom:12px">Kripto</div>
+    <div id="dash-crypto" class="grid watch-grid" style="margin-bottom:24px"></div>
+  </div>
 
-  <div class="section-title" style="font-size:14px;margin-bottom:12px">Részvények</div>
-  <div id="dash-stocks" class="grid watch-grid" style="margin-bottom:24px"></div>
+  <div class="watch-section" data-watch-module="stocks">
+    <div class="section-title" style="font-size:14px;margin-bottom:12px">Részvények</div>
+    <div id="dash-stocks" class="grid watch-grid" style="margin-bottom:24px"></div>
+  </div>
 
-  <div class="section-title" style="font-size:14px;margin-bottom:12px">Befektetési arany</div>
-  <div id="dash-gold" class="grid watch-grid" style="margin-bottom:24px"></div>
+  <div class="watch-section" data-watch-module="gold">
+    <div class="section-title" style="font-size:14px;margin-bottom:12px">Befektetési arany</div>
+    <div id="dash-gold" class="grid watch-grid" style="margin-bottom:24px"></div>
+  </div>
 
-  <div class="section-title" style="font-size:14px;margin-bottom:12px">Zálogban lévő arany</div>
-  <div id="dash-gold-pledged" class="grid watch-grid"></div>
+  <div class="watch-section" data-watch-module="pledge">
+    <div class="section-title" style="font-size:14px;margin-bottom:12px">Zálogban lévő arany</div>
+    <div id="dash-gold-pledged" class="grid watch-grid"></div>
+  </div>
 </div>
 
 <div class="tab-content" id="tab-portfolio">
@@ -617,7 +625,7 @@
 <div class="tab-content" id="tab-loan">
   <div class="section-header">
     <div class="section-title">Hitel Nyilvántartás</div>
-    <button class="btn" id="loan-add-btn" onclick="openModal('loan-modal')">+ Hitel rögzítése</button>
+    <button class="btn" id="loan-add-btn" onclick="openLoanAdd()">+ Hitel rögzítése</button>
   </div>
 
   <div>
@@ -656,7 +664,7 @@
     <div class="modal" id="loan-modal" onclick="if(event.target===this)closeModal('loan-modal')">
       <div class="modal-card">
         <div class="modal-head">
-          <div class="section-title" style="font-size:18px">Hitel hozzáadása</div>
+          <div class="section-title" style="font-size:18px" id="loan-modal-title">Hitel hozzáadása</div>
           <button class="btn btn-secondary btn-sm" onclick="closeModal('loan-modal')">✕</button>
         </div>
         <div class="form-grid fg2" style="margin-bottom:12px">
@@ -679,6 +687,10 @@
           <div>
             <label>Törlesztés napja (havonta)</label>
             <input type="number" id="ln-payday" placeholder="pl. 15" min="1" max="31" oninput="calcLoanEndDate()">
+          </div>
+          <div>
+            <label>Első törlesztő dátuma (opcionális)</label>
+            <input type="date" id="ln-first" oninput="calcLoanEndDate()">
           </div>
           <div>
             <label>Törlesztés rendszeressége</label>
@@ -706,7 +718,7 @@
           </div>
           <div id="ln-end-info" style="font-size:11px;color:var(--muted)"></div>
         </div>
-        <button class="btn" onclick="addLoan()" style="width:100%">+ Hozzáadás</button>
+        <button class="btn" id="loan-submit-btn" onclick="saveLoan()" style="width:100%">+ Hozzáadás</button>
       </div>
     </div>
   </div>
@@ -847,7 +859,7 @@
     <div style="color:var(--muted);font-size:12px;margin-bottom:24px">Profiladatok, biztonság, adózás és adatkezelés</div>
 
     <div class="grid g2" style="margin-bottom:16px">
-      <!-- PROFIL -->
+
       <div class="card">
         <div class="card-title">Profiladatok</div>
         <div class="form-grid" style="margin-bottom:16px">
@@ -864,7 +876,6 @@
         <button class="btn" onclick="updateProfile()">Adatok mentése</button>
       </div>
 
-      <!-- JELSZÓ -->
       <div class="card">
         <div class="card-title">Jelszó módosítása</div>
         <div class="form-grid" style="margin-bottom:16px">
@@ -886,9 +897,8 @@
       </div>
     </div>
 
-
     <div class="grid g2" style="margin-bottom:16px">
-      <!-- HASZNÁLT OLDALAK -->
+
       <div class="card">
         <div class="card-title">Használt oldalak</div>
         <p style="color:var(--muted);font-size:12px;margin-bottom:16px;line-height:1.6">
@@ -905,7 +915,6 @@
         <div id="acc-mod-msg" style="min-height:18px;font-size:12px;margin-top:10px"></div>
       </div>
 
-      <!-- ADÓZÁSI ADATOK -->
       <div class="card">
         <div class="card-title">Adózási adatok</div>
         <p style="color:var(--muted);font-size:12px;margin-bottom:16px;line-height:1.6">
@@ -930,7 +939,6 @@
       </div>
     </div>
 
-
     <div class="card" style="margin-bottom:16px">
       <div class="card-title">Pénzügyi kimutatás</div>
       <p style="color:var(--muted);font-size:12px;margin-bottom:16px;line-height:1.6">
@@ -938,7 +946,6 @@
       </p>
       <button class="btn" onclick="generateFinancialReport()" style="width:100%">📄 Kimutatás generálása (PDF)</button>
     </div>
-
 
     <div class="grid g2" style="margin-bottom:16px">
       <div class="card">
@@ -955,7 +962,6 @@
         </p>
       </div>
 
-      <!-- FIÓKVÁLTÁS / KIJELENTKEZÉS -->
       <div class="card">
         <div class="card-title">Fiók</div>
         <div style="display:flex;flex-direction:column;gap:10px">
@@ -975,7 +981,6 @@
       </div>
     </div>
 
-    <!-- VESZÉLYZÓNA -->
     <div class="card" style="border-color:rgba(162,59,46,0.35)">
       <div class="card-title" style="color:var(--red)">Veszélyzóna</div>
       <p style="color:var(--muted);font-size:12px;margin-bottom:16px;line-height:1.6">
@@ -1055,10 +1060,8 @@
 <div class="modal open" id="login-modal">
   <div class="auth-card">
 
-    <!-- SLIDER WRAPPER -->
     <div class="auth-slider" id="auth-slider">
 
-      <!-- BEJELENTKEZÉS PANEL -->
       <div class="auth-panel" id="auth-login-panel">
         <div class="auth-logo">
           <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent3)"><circle cx="12" cy="12" r="8.6"/><circle cx="12" cy="12" r="2.2" fill="currentColor" stroke="none"/><line x1="12" y1="2.6" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="21.4"/><line x1="2.6" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="21.4" y2="12"/></svg>
@@ -1087,7 +1090,6 @@
         </div>
       </div>
 
-      <!-- REGISZTRÁCIÓ PANEL -->
       <div class="auth-panel" id="auth-register-panel">
         <div class="auth-logo">
           <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent3)"><circle cx="12" cy="12" r="8.6"/><circle cx="12" cy="12" r="2.2" fill="currentColor" stroke="none"/><line x1="12" y1="2.6" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="21.4"/><line x1="2.6" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="21.4" y2="12"/></svg>
@@ -1117,7 +1119,7 @@
         </div>
       </div>
 
-    </div><!-- /auth-slider -->
+    </div>
   </div>
 </div>
 
