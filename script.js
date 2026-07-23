@@ -145,8 +145,8 @@ function authSlideTo(panel) {
   }
 }
 
-function logout() {
-  if (!confirm('Biztosan kijelentkezel?')) return;
+async function logout() {
+  if (!await uiConfirm('Biztosan kijelentkezel?', { title: 'Kijelentkezés', confirmText: 'Kijelentkezés', danger: false })) return;
   auth.signOut();
 }
 
@@ -240,8 +240,8 @@ async function updatePassword() {
   }
 }
 
-function switchAccount() {
-  if (!confirm('A fiókváltáshoz kijelentkeztetünk — utána más fiókkal is bejelentkezhetsz. Folytatod?')) return;
+async function switchAccount() {
+  if (!await uiConfirm('A fiókváltáshoz kijelentkeztetünk — utána más fiókkal is bejelentkezhetsz. Folytatod?', { title: 'Fiókváltás', confirmText: 'Folytatom', danger: false })) return;
   auth.signOut();
 }
 
@@ -360,7 +360,7 @@ function exportData() {
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   } catch (e) {
-    alert('A mentés exportálása nem sikerült.');
+    uiAlert('A mentés exportálása nem sikerült.');
     console.error('[VagyonMentor] export error:', e);
   }
 }
@@ -388,8 +388,17 @@ function generateFinancialReport() {
   const stockRows = Object.entries(stGroups).map(([ticker, lots]) => {
     const first = lots[0];
     const price = getLivePrice(ticker) || first.price;
-    let qty = 0, invHuf = 0;
-    lots.forEach(l => { qty += l.qty; invHuf += l.qty * l.avg; });
+    const cur = first.currency || 'HUF';
+    const fxr = rateForCurrency(cur);
+    let qty = 0, invN = 0, invHist = 0;
+    lots.forEach(l => {
+      qty += l.qty;
+      invHist += l.qty * l.avg;
+      const avgN = (l.avgNative != null) ? l.avgNative : (fxr ? l.avg / fxr : l.avg);
+      invN += l.qty * avgN;
+    });
+    const invUsd = nativeToUsd(invN, cur);
+    const invHuf = (invUsd !== null && fxReady()) ? invUsd * usdHuf : invHist;
     const curHuf = qty * price;
     const divYield = stockDivYield(first, price);
     const annualDiv = stockIsCash(first) ? curHuf * divYield / 100 : 0;
@@ -457,7 +466,7 @@ function generateFinancialReport() {
 
   const sumItem = (lbl, val, cls) => `<div class="sum-item"><span class="lbl">${lbl}</span><span class="val ${cls||''}">${val}</span></div>`;
   const summaryHtml = `<div class="summary">
-    ${sumItem('Nettó vagyon', fmt(netWorth), netWorth>=0?'pos':'neg')}
+    ${sumItem('Teljes vagyon', fmt(netWorth), netWorth>=0?'pos':'neg')}
     ${sumItem('Befektetett eszközök értéke', fmt(currentValue))}
     ${sumItem('Bekerülési (befektetett) költség', fmt(investedCost))}
     ${sumItem('Nem realizált eredmény', pl(unrealPL, investedCost>0?unrealPL/investedCost*100:null))}
@@ -476,7 +485,7 @@ function generateFinancialReport() {
      <tr class="subtotal"><td>Befektetett eszközök összesen</td><td class="num">${fmt(currentValue)}</td><td class="num">100%</td></tr>
      ${useLoans ? `<tr><td>Hitel</td><td class="num neg">${neg(totalLoan)}</td><td class="num muted">—</td></tr>` : ''}
      ${usePledge ? `<tr><td>Zálog</td><td class="num neg">${neg(totalPledge)}</td><td class="num muted">—</td></tr>` : ''}`,
-    `<tr><td>Nettó vagyon</td><td class="num ${netWorth>=0?'pos':'neg'}">${fmt(netWorth)}</td><td></td></tr>`
+    `<tr><td>Teljes vagyon</td><td class="num ${netWorth>=0?'pos':'neg'}">${fmt(netWorth)}</td><td></td></tr>`
   );
 
   const goldBody = goldRows.map(r => `<tr>
@@ -660,7 +669,7 @@ footer{margin-top:30px;padding-top:12px;border-top:1px solid #eee;color:#999;fon
 </body></html>`;
 
   const w = window.open('', '_blank');
-  if (!w) { alert('A kimutatás megnyitásához engedélyezd a felugró ablakokat ehhez az oldalhoz.'); return; }
+  if (!w) { uiAlert('A kimutatás megnyitásához engedélyezd a felugró ablakokat ehhez az oldalhoz.'); return; }
   w.document.open();
   w.document.write(html);
   w.document.close();
@@ -671,14 +680,14 @@ function importData(input) {
   const file = input.files && input.files[0];
   if (!file) return;
   const reader = new FileReader();
-  reader.onload = () => {
+  reader.onload = async () => {
     let data;
     try { data = JSON.parse(reader.result); }
-    catch (e) { alert('Hibás mentésfájl — nem JSON formátum.'); input.value = ''; return; }
+    catch (e) { uiAlert('Hibás mentésfájl — nem JSON formátum.'); input.value = ''; return; }
     if (!data || typeof data !== 'object' || Array.isArray(data)) {
-      alert('Ez nem egy érvényes VagyonMentor mentésfájl.'); input.value = ''; return;
+      uiAlert('Ez nem egy érvényes VagyonMentor mentésfájl.'); input.value = ''; return;
     }
-    if (!confirm('Biztosan visszatöltöd ezt a mentést? A jelenlegi adatok felülíródnak ezen az eszközön.')) {
+    if (!await uiConfirm('Biztosan visszatöltöd ezt a mentést? A jelenlegi adatok felülíródnak ezen az eszközön.', { title: 'Mentés visszatöltése', confirmText: 'Visszatöltés' })) {
       input.value = ''; return;
     }
     state = data;
@@ -686,15 +695,15 @@ function importData(input) {
     save();
     renderAll();
     closeModal('data-modal');
-    alert('A mentés visszatöltve.');
+    uiAlert('A mentés visszatöltve.');
     input.value = '';
   };
   reader.readAsText(file);
 }
 
-function resetAllData() {
-  if (!confirm('Biztosan törlöd az ÖSSZES magánszemély adatot a felhőből (részvény, kripto, arany, hitel, zálog, szolgáltatás)? Ez a művelet nem visszavonható — előtte érdemes fájlba menteni!')) return;
-  if (!confirm('Utolsó megerősítés: minden ilyen adat véglegesen törlődik. Folytatod?')) return;
+async function resetAllData() {
+  if (!await uiConfirm('Biztosan törlöd az ÖSSZES magánszemély adatot a felhőből (részvény, kripto, arany, hitel, zálog, szolgáltatás)? Ez a művelet nem visszavonható — előtte érdemes fájlba menteni!')) return;
+  if (!await uiConfirm('Utolsó megerősítés: minden ilyen adat véglegesen törlődik. Folytatod?', { title: 'Végleges törlés', confirmText: 'Végleges törlés' })) return;
   try { localStorage.removeItem('vagyonmentor_v2'); } catch (e) {}
   const reset = {
     stocks: [], crypto: [], loans: [], pledges: [],
@@ -727,16 +736,50 @@ function fmtCur(n, cur) {
   return Math.round(n).toLocaleString('hu-HU') + ' Ft';
 }
 
-function usdFromHuf(huf, withSign) {
-  if (!usdHuf || !isFinite(usdHuf) || usdHuf <= 0) return '';
-  const v = huf / usdHuf;
+function nativeToUsd(v, cur) {
+  if (!v) return 0;
+  if (cur === 'USD') return v;
+  if (cur === 'EUR') return (eurHuf && usdHuf) ? v * eurHuf / usdHuf : null;
+  if (cur === 'HUF') return usdHuf ? v / usdHuf : null;
+  return null;
+}
+
+function stockInvestedUsd() {
+  const groups = {};
+  state.stocks.forEach(s => { (groups[s.ticker] = groups[s.ticker] || []).push(s); });
+  let total = 0, ok = true;
+  Object.values(groups).forEach(lots => {
+    const cur = lots[0].currency || 'HUF';
+    const rate = rateForCurrency(cur);
+    let invN = 0;
+    lots.forEach(l => {
+      const avgN = (l.avgNative != null) ? l.avgNative : (rate ? l.avg / rate : l.avg);
+      invN += l.qty * avgN;
+    });
+    const u = nativeToUsd(invN, cur);
+    if (u === null) { ok = false; return; }
+    total += u;
+  });
+  return ok ? total : null;
+}
+
+function stockInvestedHuf() {
+  const usd = stockInvestedUsd();
+  if (usd === null || !fxReady()) return null;
+  return usd * usdHuf;
+}
+
+function fmtUsd(v, withSign) {
+  if (v === null || v === undefined || !isFinite(v)) return '';
   const s = fmtCur(Math.abs(v), 'USD');
-  if (withSign) return (v >= 0 ? '+' : '-') + s;
-  return s;
+  return withSign ? ((v >= 0 ? '+' : '-') + s) : s;
 }
 
 function rateForCurrency(cur) {
-  return cur === 'USD' ? usdHuf : (cur === 'EUR' ? eurHuf : 1);
+  if (cur === 'HUF' || !cur) return 1;
+  if (cur === 'USD') return fxReady() ? usdHuf : null;
+  if (cur === 'EUR') return (eurHuf && isFinite(eurHuf) && eurHuf > 0) ? eurHuf : null;
+  return 1;
 }
 
 function formatThousands(el) {
@@ -776,12 +819,16 @@ const COINGECKO_ID_MAP = {
   INJ: 'injective-protocol', FTM: 'fantom'
 };
 
-let usdHuf = 306;
+let usdHuf = null;
 
-let eurHuf = 353;
+let eurHuf = null;
 
 let fxUpdatedAt = null;
 let fxQuoteDate = null;
+
+function fxReady() {
+  return !!(usdHuf && isFinite(usdHuf) && usdHuf > 0);
+}
 
 async function fetchUsdHuf() {
   await fetchFxRates();
@@ -799,7 +846,7 @@ async function fetchCryptoPricesHuf(tickers) {
     tickers.forEach(t => {
       const id = COINGECKO_ID_MAP[t.toUpperCase()] || t.toLowerCase();
       if (data[id] && data[id].usd) {
-        result[t.toUpperCase()] = data[id].usd * usdHuf;
+        if (fxReady()) result[t.toUpperCase()] = data[id].usd * usdHuf;
       }
     });
     return result;
@@ -844,11 +891,10 @@ async function fetchStockPriceHuf(ticker, currency) {
     if (!price) return null;
     let cur = quoteCur || currency;
     if (cur === 'GBp') { price = price / 100; cur = 'GBP'; }
-    if (cur === 'USD') return price * usdHuf;
-    if (cur === 'EUR') return price * eurHuf;
     if (cur === 'HUF') return price;
-    const fallback = currency === 'USD' ? usdHuf : (currency === 'EUR' ? eurHuf : 1);
-    return price * fallback;
+    const rate = rateForCurrency(cur) ?? rateForCurrency(currency);
+    if (!rate) return null;
+    return price * rate;
   } catch(e) { return null; }
 }
 
@@ -885,9 +931,50 @@ async function fetchStockDividendInfo(ticker) {
   } catch(e) { return null; }
 }
 
+const PRICE_REFRESH_MS = 10 * 60 * 1000;
+let lastPriceRefreshAt = 0;
+
+function maybeRefreshPrices() {
+  if (!currentUid) return;
+  if (document.hidden) return;
+  if (refreshing) {
+    if (Date.now() - lastPriceRefreshAt > 3 * 60 * 1000) refreshing = false;
+    else return;
+  }
+  if (Date.now() - lastPriceRefreshAt < PRICE_REFRESH_MS) return;
+  refreshAllPrices();
+}
+
+setInterval(maybeRefreshPrices, 60 * 1000);
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) maybeRefreshPrices();
+});
+
+async function backfillCryptoNative() {
+  if (!Array.isArray(state.crypto) || !state.crypto.length) return;
+  let changed = false;
+  for (const t of state.crypto) {
+    if (t.priceNative != null) continue;
+    const cur = t.currency || 'HUF';
+    if (cur === 'HUF') {
+      t.priceNative = t.price;
+      t.feeNative = t.fee || 0;
+      changed = true;
+      continue;
+    }
+    const r = await fxRateForDate(cur, t.date);
+    if (!r) continue;
+    t.priceNative = t.price / r;
+    t.feeNative = (t.fee || 0) / r;
+    changed = true;
+  }
+  if (changed) { save(); renderCrypto(); }
+}
+
 async function refreshAllPrices() {
   if (refreshing) return;
   refreshing = true;
+  lastPriceRefreshAt = Date.now();
   setRefreshStatus('Frissítés…');
 
   await fetchUsdHuf();
@@ -1131,9 +1218,10 @@ function updateStockLabels() {
   const info = document.getElementById('st-fx-info');
   if (cur !== 'HUF') {
     info.style.display = 'block';
-    const rate = cur === 'USD' ? usdHuf : (cur === 'EUR' ? eurHuf : 1);
-    document.getElementById('st-fx-rate').textContent = Math.round(rate);
-    info.innerHTML = `Az árak a vétel dátumához tartozó (történeti) árfolyammal lesznek HUF-ra váltva. Mai árfolyam: 1 ${cur} ≈ <span id="st-fx-rate">${Math.round(rate)}</span> Ft`;
+    const rate = rateForCurrency(cur);
+    info.innerHTML = rate
+      ? `Az árak a vétel dátumához tartozó (történeti) árfolyammal lesznek HUF-ra váltva. Mai árfolyam: 1 ${cur} ≈ <span id="st-fx-rate">${Math.round(rate)}</span> Ft`
+      : `<span style="color:var(--red)">Az árfolyam még nem érhető el — a rögzítés előtt frissítsd az árfolyamot.</span>`;
   } else {
     info.style.display = 'none';
   }
@@ -1146,10 +1234,10 @@ function updateCryptoLabels() {
   document.getElementById('cr-fee-label').textContent = `Díj (${sym})`;
   const info = document.getElementById('cr-fx-info');
   if (cur !== 'HUF') {
-    const rate = cur === 'USD' ? usdHuf : (cur === 'EUR' ? eurHuf : 1);
+    const rate = rateForCurrency(cur);
     info.style.display = 'block';
     document.getElementById('cr-fx-cur').textContent = cur;
-    document.getElementById('cr-fx-rate').textContent = Math.round(rate);
+    document.getElementById('cr-fx-rate').textContent = rate ? Math.round(rate) : '—';
   } else {
     info.style.display = 'none';
   }
@@ -1173,7 +1261,8 @@ async function fetchFxRates() {
   if (!d || !d.rates || !d.rates.HUF) return false;
 
   const newUsd = d.rates.HUF;
-  const newEur = d.rates.EUR ? newUsd / d.rates.EUR : eurHuf;
+  const newEur = d.rates.EUR ? newUsd / d.rates.EUR : null;
+  if (!newUsd || !isFinite(newUsd) || newUsd <= 0) return false;
   if (!fxRateIsSane(newUsd, newEur)) return false;
 
   usdHuf = newUsd;
@@ -1189,19 +1278,6 @@ async function fetchFxRates() {
   return true;
 }
 
-async function refreshFxNow() {
-  const el = document.getElementById('fx-info');
-  if (el) el.textContent = 'Árfolyam lekérése…';
-  const ok = await fetchFxRates();
-  if (!ok && el) {
-    el.innerHTML = '<span style="color:var(--red)">Az árfolyam lekérése nem sikerült — a korábbi érték marad érvényben.</span>';
-    return;
-  }
-  updateFxLabel();
-  await refreshAllPrices();
-  renderAll();
-}
-
 function fxAgeHours() {
   if (!fxUpdatedAt) return null;
   const t = Date.parse(fxUpdatedAt);
@@ -1212,7 +1288,10 @@ function fxAgeHours() {
 function updateFxLabel() {
   const el = document.getElementById('fx-info');
   if (!el) return;
-  if (!usdHuf) { el.textContent = ''; return; }
+  if (!fxReady()) {
+    el.innerHTML = '<span style="color:var(--red)">Árfolyam még nem érhető el (API) — az átváltott értékek hiányozhatnak.</span>';
+    return;
+  }
   const age = fxAgeHours();
   const stale = age === null || age > 24;
   const rate = usdHuf.toLocaleString('hu-HU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -1232,7 +1311,7 @@ async function fxRateForDate(currency, dateStr) {
   if (currency === 'HUF') return 1;
   const today = now();
   if (!dateStr || dateStr >= today) {
-    return currency === 'USD' ? usdHuf : eurHuf;
+    return rateForCurrency(currency);
   }
   if (!fxHistoryCache[dateStr]) {
     try {
@@ -1246,7 +1325,7 @@ async function fxRateForDate(currency, dateStr) {
     } catch(e) {}
   }
   const h = fxHistoryCache[dateStr];
-  if (!h) return currency === 'USD' ? usdHuf : eurHuf;
+  if (!h) return rateForCurrency(currency);
   return currency === 'USD' ? h.usd : h.eur;
 }
 
@@ -1314,6 +1393,11 @@ async function addStock() {
   try { const r = await resolveTicker(ticker); if (r && r.name) name = r.name; } catch(e) {}
 
   const fxRate = await fxRateForDate(currency, buyDate);
+  if (!fxRate) {
+    setMsg('Az árfolyam nem érhető el, ezért a rögzítés most nem lehetséges. Próbáld újra kicsit később.', 'var(--red)');
+    if (btn) btn.disabled = false;
+    return;
+  }
   const avg = avgNative * fxRate;
   if (stockEditId) {
     const s = state.stocks.find(x => x.id === stockEditId);
@@ -1346,7 +1430,11 @@ async function addStock() {
   refreshAllPrices();
 }
 
-function deleteStock(id) {
+async function deleteStock(id) {
+  const l = state.stocks.find(x => x.id === id);
+  if (!l) return;
+  const label = `${l.ticker} — ${fmtNum(l.qty)} db${l.buyDate ? ' (' + l.buyDate + ')' : ''}`;
+  if (!await uiConfirm(`Biztosan törlöd ezt a tételt?\n\n${label}`)) return;
   state.stocks = state.stocks.filter(s=>s.id!==id);
   save(); renderAll();
 }
@@ -1399,9 +1487,9 @@ async function confirmStockSell() {
   stockSellId = null;
   renderAll();
 }
-function deleteStockFromSale() {
+async function deleteStockFromSale() {
   if (!stockSellId) return;
-  if (!confirm('Biztosan törlöd ezt a részvénytételt (eladás rögzítése nélkül)?')) return;
+  if (!await uiConfirm('Biztosan törlöd ezt a részvénytételt (eladás rögzítése nélkül)?')) return;
   state.stocks = state.stocks.filter(x => x.id !== stockSellId);
   save();
   closeModal('stock-sale-modal');
@@ -1488,8 +1576,8 @@ function renderStocks() {
     plEl0.textContent = fmt(0);
     plEl0.className = 'stat-value';
     document.getElementById('st-sum-pl-card').className = 'card card-stat-dark';
-    document.getElementById('st-sum-div').innerHTML = fmt(0);
-    ['st-sum-invested-usd','st-sum-current-usd','st-sum-pl-usd'].forEach(id => {
+    document.getElementById('st-sum-div').textContent = fmt(0);
+    ['st-sum-invested-usd','st-sum-current-usd','st-sum-pl-usd','st-sum-div-usd'].forEach(id => {
       const el = document.getElementById(id); if (el) el.textContent = '';
     });
     return;
@@ -1544,30 +1632,48 @@ function renderStocks() {
         <td><strong>${fmtCur(g.currentN, g.cur)}</strong></td>
         <td class="${g.plN>=0?'green':'red'}" style="font-weight:500">${g.plN>=0?'+':''}${fmtCur(g.plN, g.cur)} <span style="font-size:10px">(${g.plPct.toFixed(1)}%)</span></td>
         <td class="yellow">${fmtCur(g.annualDivN, g.cur)}</td>
-        <td>${g.divYield.toFixed(2)}%${s.divAuto ? ' <span style="font-size:9px;color:var(--accent2)" title="Automatikusan a Yahoo-ról">auto</span>' : ''}</td>
+        <td>${g.divYield.toFixed(2)}%</td>
       </tr>
     `;
   }).join('');
 
-  const totalPL = totalCurrent - totalInvested;
-  document.getElementById('st-sum-invested').textContent = fmt(totalInvested);
-  document.getElementById('st-sum-current').textContent = fmt(totalCurrent);
+  let usdInvN = 0, usdCurN = 0, usdDivN = 0, usdOk = true;
+  groupArr.forEach(g => {
+    const i = nativeToUsd(g.investedN, g.cur);
+    const c = nativeToUsd(g.currentN, g.cur);
+    const d = nativeToUsd(g.annualDivN, g.cur);
+    if (i === null || c === null || d === null) { usdOk = false; return; }
+    usdInvN += i; usdCurN += c; usdDivN += d;
+  });
+  const usdPLN = usdCurN - usdInvN;
+  const canHuf = usdOk && fxReady();
+
+  const hufInvested = canHuf ? usdInvN * usdHuf : null;
+  const hufCurrent  = canHuf ? usdCurN * usdHuf : null;
+  const hufPL       = canHuf ? usdPLN  * usdHuf : null;
+  const hufDiv      = canHuf ? usdDivN * usdHuf : null;
+
+  const setBig = (id, val, withSign) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = (val === null) ? '—' : ((withSign && val >= 0 ? '+' : '') + fmt(val));
+  };
+  setBig('st-sum-invested', hufInvested);
+  setBig('st-sum-current', hufCurrent);
+  setBig('st-sum-pl', hufPL, true);
+
   const plEl = document.getElementById('st-sum-pl');
-  plEl.textContent = (totalPL>=0?'+':'') + fmt(totalPL);
-  plEl.className = 'stat-value ' + (totalPL>=0?'green':'red');
-  document.getElementById('st-sum-pl-card').className = 'card ' + (totalPL>=0?'card-stat-green':'card-stat-red');
-  const usdInv = usdFromHuf(totalInvested);
-  const usdCur = usdFromHuf(totalCurrent);
-  const usdPL  = usdFromHuf(totalPL, true);
+  plEl.className = 'stat-value ' + (hufPL === null ? '' : (hufPL >= 0 ? 'green' : 'red'));
+  document.getElementById('st-sum-pl-card').className =
+    'card ' + (hufPL === null ? 'card-stat-dark' : (hufPL >= 0 ? 'card-stat-green' : 'card-stat-red'));
+
   const setSub = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
-  setSub('st-sum-invested-usd', usdInv);
-  setSub('st-sum-current-usd', usdCur);
-  setSub('st-sum-pl-usd', usdPL);
-  const usdDiv = usdFromHuf(totalDiv);
-  document.getElementById('st-sum-div').innerHTML =
-    escHtml(fmt(totalDiv)) + (usdDiv ? ` <span class="usd-inline">${escHtml(usdDiv)}</span>` : '');
-  const stNetEl = document.getElementById('st-sum-div-net');
-  if (stNetEl) stNetEl.textContent = 'Nettó érték: ' + fmt(netDividend(totalDiv));
+  setSub('st-sum-invested-usd', usdOk ? fmtUsd(usdInvN) : '');
+  setSub('st-sum-current-usd', usdOk ? fmtUsd(usdCurN) : '');
+  setSub('st-sum-pl-usd', usdOk ? fmtUsd(usdPLN, true) : '');
+
+  document.getElementById('st-sum-div').textContent = hufDiv === null ? '—' : fmt(hufDiv);
+  setSub('st-sum-div-usd', usdOk ? fmtUsd(usdDivN) : '');
 
   renderDividendCalendar();
 
@@ -1620,12 +1726,14 @@ function renderDividendCalendar() {
     const first = lots[0];
     if (!stockIsCash(first)) return;
     const qty = lots.reduce((a,l)=>a+l.qty, 0);
-    const rate = rateForCurrency(first.currency || 'HUF');
+    const cur = first.currency || 'HUF';
     const monthMap = (first.divAuto && first.divByMonthNative) ? first.divByMonthNative : manualDivMonthMap(first);
     if (!monthMap) return;
     const monthCount = Object.keys(monthMap).length;
     Object.entries(monthMap).forEach(([m, perShareN]) => {
-      const amountHuf = perShareN * qty * rate;
+      const usd = nativeToUsd(perShareN * qty, cur);
+      if (usd === null || !fxReady()) return;
+      const amountHuf = Math.round(usd * usdHuf);
       if (amountHuf > 0) { byMonth[+m].push({ ticker, amountHuf, monthCount }); anyData = true; }
     });
   });
@@ -1815,13 +1923,14 @@ async function addCryptoTrade() {
   if (!coin || !qty || !priceNative) return;
   const name = await resolveCryptoName(coin);
   const fxRate = await fxRateForDate(currency, date);
+  if (!fxRate) { uiAlert('Az árfolyam nem érhető el, ezért a rögzítés most nem lehetséges. Próbáld újra kicsit később.'); return; }
   const price = priceNative * fxRate;
   const fee = feeNative * fxRate;
   if (cryptoEditId) {
     const tr = state.crypto.find(x => x.id === cryptoEditId);
     if (tr) Object.assign(tr, { coin, name: name || tr.name, type, qty, price, date, fee, currency });
   } else {
-    state.crypto.push({ id:uid(), coin, name, type, qty, price, date, fee, currency });
+    state.crypto.push({ id:uid(), coin, name, type, qty, price, priceNative, fee, feeNative, date, currency });
   }
   save();
   cryptoEditId = null;
@@ -1830,9 +1939,15 @@ async function addCryptoTrade() {
   const t = document.getElementById('crypto-modal-title'); if (t) t.textContent = 'Vétel rögzítése';
   closeModal('crypto-modal');
   renderAll();
+  refreshAllPrices();
 }
 
-function deleteCryptoTrade(id) {
+async function deleteCryptoTrade(id) {
+  const t = state.crypto.find(x => x.id === id);
+  if (!t) return;
+  const kind = (t.type === 'sell') ? 'eladás' : 'vétel';
+  const label = `${t.coin} — ${kind}, ${fmtNum(t.qty)} db${t.date ? ' (' + t.date + ')' : ''}`;
+  if (!await uiConfirm(`Biztosan törlöd ezt a tételt?\n\n${label}`)) return;
   state.crypto = state.crypto.filter(c=>c.id!==id);
   save(); renderAll();
 }
@@ -1870,9 +1985,11 @@ function updateSellLabels() {
   document.getElementById('sell-fee-label').textContent = `Díj (${sym})`;
   const info = document.getElementById('sell-fx-info');
   if (cur !== 'HUF') {
-    const rate = cur === 'USD' ? usdHuf : eurHuf;
+    const rate = rateForCurrency(cur);
     info.style.display = 'block';
-    info.innerHTML = `Az ár és a díj az eladás dátumához tartozó (történeti) árfolyammal lesz HUF-ra váltva. Mai árfolyam: 1 ${cur} ≈ ${Math.round(rate)} Ft`;
+    info.innerHTML = rate
+      ? `Az ár és a díj az eladás dátumához tartozó (történeti) árfolyammal lesz HUF-ra váltva. Mai árfolyam: 1 ${cur} ≈ ${Math.round(rate)} Ft`
+      : `<span style="color:var(--red)">Az árfolyam még nem érhető el — az eladás előtt frissítsd az árfolyamot.</span>`;
   } else {
     info.style.display = 'none';
   }
@@ -1897,9 +2014,14 @@ async function confirmSell() {
     return;
   }
   const fxRate = await fxRateForDate(currency, date);
+  if (!fxRate) {
+    errEl.textContent = 'Az árfolyam nem érhető el, ezért az eladás most nem rögzíthető. Próbáld újra kicsit később.';
+    errEl.style.display = 'block';
+    return;
+  }
   const price = priceNative * fxRate;
   const fee = feeNative * fxRate;
-  state.crypto.push({ id:uid(), coin:sellCoin, type:'sell', qty, price, date, fee, currency });
+  state.crypto.push({ id:uid(), coin:sellCoin, type:'sell', qty, price, priceNative, fee, feeNative, date, currency });
   save();
   closeSellModal();
   renderAll();
@@ -1908,22 +2030,26 @@ async function confirmSell() {
 function calcCryptoPL() {
   const coins = {};
   state.crypto.forEach(t => {
-    if (!coins[t.coin]) coins[t.coin] = { buys: [], realized: 0, fees: 0 };
+    if (!coins[t.coin]) coins[t.coin] = { buys: [], realized: 0, realizedN: 0, fees: 0, cur: t.currency || 'HUF', nativeOk: true };
     coins[t.coin].fees += t.fee;
+    const pN = (t.priceNative != null) ? t.priceNative : null;
+    if (pN === null) coins[t.coin].nativeOk = false;
     if (t.type === 'buy') {
-      coins[t.coin].buys.push({ qty: t.qty, price: t.price });
+      coins[t.coin].buys.push({ qty: t.qty, price: t.price, priceN: pN });
     } else {
       let remaining = t.qty;
-      let costBasis = 0;
+      let costBasis = 0, costBasisN = 0;
       while (remaining > 0 && coins[t.coin].buys.length) {
         const buy = coins[t.coin].buys[0];
         const used = Math.min(remaining, buy.qty);
         costBasis += used * buy.price;
+        costBasisN += used * (buy.priceN || 0);
         buy.qty -= used;
         remaining -= used;
         if (buy.qty <= 0) coins[t.coin].buys.shift();
       }
       coins[t.coin].realized += t.qty * t.price - costBasis;
+      coins[t.coin].realizedN += t.qty * (pN || 0) - costBasisN;
     }
   });
   return coins;
@@ -1936,6 +2062,7 @@ function renderCrypto() {
 
   const coins = calcCryptoPL();
   let totalRealized = 0, totalOpen = 0, totalLiveOpen = 0, totalFees = 0;
+  let usdOpen = 0, usdLiveOpen = 0, usdRealized = 0, usdOk = fxReady();
 
   Object.entries(coins).forEach(([coin, c]) => {
     const livePrice = getLivePrice(coin);
@@ -1945,18 +2072,39 @@ function renderCrypto() {
     totalOpen += openCost;
     totalLiveOpen += livePrice ? openQty * livePrice : openCost;
     totalFees += c.fees;
+
+    if (usdOk) {
+      if (!c.nativeOk) { usdOk = false; return; }
+      const openCostN = c.buys.reduce((a,b)=>a+b.qty*(b.priceN||0),0);
+      const oUsd = nativeToUsd(openCostN, c.cur);
+      const rUsd = nativeToUsd(c.realizedN, c.cur);
+      if (oUsd === null || rUsd === null) { usdOk = false; return; }
+      usdOpen += oUsd;
+      usdRealized += rUsd;
+      usdLiveOpen += livePrice ? (openQty * livePrice) / usdHuf : oUsd;
+    }
   });
 
-  document.getElementById('cr-open').textContent = fmt(totalOpen);
-  const totalPL = totalRealized + (totalLiveOpen - totalOpen);
+  const usdPL = usdRealized + (usdLiveOpen - usdOpen);
+  const canHuf = usdOk && fxReady();
+
+  const setSub = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
+
+  document.getElementById('cr-open').textContent = canHuf ? fmt(usdOpen * usdHuf) : fmt(totalOpen);
+  setSub('cr-open-usd', usdOk ? fmtUsd(usdOpen) : '');
+
+  const totalPL = canHuf ? usdPL * usdHuf : (totalRealized + (totalLiveOpen - totalOpen));
   const plEl = document.getElementById('cr-pl');
   plEl.textContent = (totalPL>=0?'+':'') + fmt(totalPL);
   plEl.className = 'stat-value ' + (totalPL>=0?'green':'red');
   document.getElementById('cr-pl-card').className = 'card ' + (totalPL>=0?'card-stat-green':'card-stat-red');
+  setSub('cr-pl-usd', usdOk ? fmtUsd(usdPL, true) : '');
 
   const liveOpenEl = document.getElementById('cr-live-open');
   if (liveOpenEl) {
-    liveOpenEl.innerHTML = `<div class="stat-value cyan">${fmt(totalLiveOpen)}</div>`;
+    const liveHufShown = canHuf ? usdLiveOpen * usdHuf : totalLiveOpen;
+    liveOpenEl.innerHTML = `<div class="stat-value cyan">${fmt(liveHufShown)}</div>`
+      + (usdOk ? `<div class="stat-sub">${escHtml(fmtUsd(usdLiveOpen))}</div>` : '');
   }
 
   const nameMap = {}, coinCur = {}, coinLastDate = {}, coinBuyCount = {};
@@ -2028,7 +2176,10 @@ function renderCrypto() {
     const curVal = live ? openQty*live : openCost;
     const pl = curVal - openCost;
     const plPct = openCost ? pl/openCost*100 : 0;
-    coinStats.push({ coin, curVal, openCost, pl, plPct });
+    const cur = c.cur || 'HUF';
+    const fxr = rateForCurrency(cur);
+    const curValN = (cur === 'HUF') ? curVal : (fxr ? curVal / fxr : null);
+    coinStats.push({ coin, curVal, openCost, pl, plPct, cur, curValN });
   });
 
   const allocEl = document.getElementById('crypto-allocation');
@@ -2048,8 +2199,8 @@ function renderCrypto() {
         const share = s.curVal/totalVal*100;
         return `<div>
           <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;margin-bottom:4px">
-            <span><strong style="color:${color}">${s.coin}</strong> <span style="color:var(--muted)">${share.toFixed(1)}%</span></span>
-            <span class="cyan" style="font-weight:600">${fmt(s.curVal)}</span>
+            <span><strong style="color:${color}">${s.coin}</strong> <strong style="margin-left:5px">${share.toFixed(1)}%</strong></span>
+            <span style="color:var(--muted);font-size:11px;white-space:nowrap">${s.curValN === null ? '—' : fmtCur(s.curValN, s.cur)}</span>
           </div>
           <div class="progress-bar" style="height:6px"><div class="progress-fill" style="width:${share}%;background:${color}"></div></div>
         </div>`;
@@ -2517,8 +2668,13 @@ function saveLoan() {
   renderAll();
 }
 
-function deleteLoan(id) {
-  state.loans = state.loans.filter(l => l.id !== id);
+async function deleteLoan(id) {
+  const l = state.loans.find(x => x.id === id);
+  if (!l) return;
+  const paid = Object.keys(state.paidInstallments[id] || {}).length;
+  const extra = paid ? `\n\nA(z) ${paid} befizetettként jelölt részlet is törlődik.` : '';
+  if (!await uiConfirm(`Biztosan törlöd ezt a hitelt?\n\n${l.name}${extra}`)) return;
+  state.loans = state.loans.filter(x => x.id !== id);
   if (state.paidInstallments[id]) delete state.paidInstallments[id];
   save(); renderAll();
 }
@@ -2636,6 +2792,20 @@ function goldItemValue(item, spot) {
 }
 
 let goldEditId = null;
+async function deleteGold(id) {
+  const g = state.goldItems.find(x => x.id === id);
+  if (!g) return;
+  const inPledge = state.pledges.some(p => !p.redeemed &&
+    (Array.isArray(p.goldIds) ? p.goldIds.includes(id) : p.goldId === id));
+  const msg = inPledge
+    ? `A(z) "${g.name}" tétel jelenleg zálogban van. Ha törlöd, a zálogtétel fedezete hiányos lesz. Biztosan törlöd?`
+    : `Biztosan törlöd a(z) "${g.name}" tételt?`;
+  if (!await uiConfirm(msg)) return;
+  state.goldItems = state.goldItems.filter(x => x.id !== id);
+  save();
+  renderAll();
+}
+
 function openGoldAdd() {
   goldEditId = null;
   ['gd-name','gd-code','gd-grams','gd-cost'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
@@ -2679,6 +2849,7 @@ function addGold() {
   document.getElementById('gd-date').value = now();
   closeModal('gold-modal');
   renderAll();
+  refreshAllPrices();
 }
 
 function pledgeAddDays(dateStr, days) {
@@ -2822,8 +2993,12 @@ function addPledge() {
   renderAll();
 }
 
-function deletePledge(id) {
-  state.pledges = state.pledges.filter(p => p.id !== id);
+async function deletePledge(id) {
+  const p = state.pledges.find(x => x.id === id);
+  if (!p) return;
+  const label = p.ticketNo ? `a(z) ${p.ticketNo} zálogjegyet` : 'ezt a zálogtételt';
+  if (!await uiConfirm(`Biztosan törlöd ${label}?`)) return;
+  state.pledges = state.pledges.filter(x => x.id !== id);
   save(); renderAll();
 }
 
@@ -3053,10 +3228,9 @@ function renderPledges() {
     else badge = `<span class="badge badge-green">aktív</span>`;
 
     const headerBtn = `<div style="display:flex;gap:8px;flex-wrap:wrap">`
+      + (redeemed ? '' : `<button class="btn btn-sm" onclick="openRedeemModal('${p.id}')">Kiváltás</button>`)
       + `<button class="btn btn-secondary btn-sm js-edit-btn" onclick="openPledgeEdit('${p.id}')" title="Szerkesztés">✎</button>`
-      + (redeemed
-          ? `<button class="btn btn-danger btn-sm js-del-btn" onclick="deletePledge('${p.id}')" title="Törlés">×</button>`
-          : `<button class="btn btn-sm" onclick="openRedeemModal('${p.id}')">Kiváltás</button>`)
+      + `<button class="btn btn-danger btn-sm js-del-btn" onclick="deletePledge('${p.id}')" title="Törlés">×</button>`
       + `</div>`;
 
     const redeemRow = redeemed
@@ -3148,6 +3322,7 @@ async function fetchGoldSpotHuf() {
     const d = await r.json();
     const usdPerOunce = d.price;
     if (usdPerOunce) {
+      if (!fxReady()) return null;
       return (usdPerOunce / 31.1035) * usdHuf;
     }
   } catch(e) {}
@@ -3197,9 +3372,9 @@ function renderGold() {
     totalValue += value;
     if (pledgedSet.has(g.id)) {
       const ticket = pledgeTicketForGold(g.id);
-      pledgedRows.push(`<tr>${commonCells(g, value, pl)}<td><span class="badge badge-purple">${ticket ? escHtml(ticket) : '—'}</span></td></tr>`);
+      pledgedRows.push(`<tr>${commonCells(g, value, pl)}<td><div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><span class="badge badge-purple">${ticket ? escHtml(ticket) : '—'}</span><button class="btn btn-sm btn-secondary js-edit-btn" onclick="openGoldEdit('${g.id}')" title="Szerkesztés">✎</button><button class="btn btn-danger btn-sm js-del-btn" onclick="deleteGold('${g.id}')" title="Törlés">×</button></div></td></tr>`);
     } else {
-      freeRows.push(`<tr>${commonCells(g, value, pl)}<td><div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn btn-sm btn-secondary js-edit-btn" onclick="openGoldEdit('${g.id}')" title="Szerkesztés">✎</button><button class="btn btn-sm" onclick="openGoldSell('${g.id}')">Eladás</button></div></td></tr>`);
+      freeRows.push(`<tr>${commonCells(g, value, pl)}<td><div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn btn-sm" onclick="openGoldSell('${g.id}')">Eladás</button><button class="btn btn-sm btn-secondary js-edit-btn" onclick="openGoldEdit('${g.id}')" title="Szerkesztés">✎</button><button class="btn btn-danger btn-sm js-del-btn" onclick="deleteGold('${g.id}')" title="Törlés">×</button></div></td></tr>`);
     }
   });
 
@@ -3249,9 +3424,9 @@ function confirmGoldSell() {
   goldSellId = null;
   renderAll();
 }
-function deleteGoldFromSale() {
+async function deleteGoldFromSale() {
   if (!goldSellId) return;
-  if (!confirm('Biztosan törlöd ezt az aranytételt (eladás rögzítése nélkül)?')) return;
+  if (!await uiConfirm('Biztosan törlöd ezt az aranytételt (eladás rögzítése nélkül)?')) return;
   state.goldItems = state.goldItems.filter(x => x.id !== goldSellId);
   save();
   closeModal('gold-sale-modal');
@@ -3323,8 +3498,11 @@ function addService() {
   renderDashboard();
 }
 
-function deleteService(id) {
-  state.services = state.services.filter(s => s.id !== id);
+async function deleteService(id) {
+  const sv = state.services.find(x => x.id === id);
+  if (!sv) return;
+  if (!await uiConfirm(`Biztosan törlöd ezt a szolgáltatást?\n\n${sv.name}`)) return;
+  state.services = state.services.filter(x => x.id !== id);
   save(); renderServices(); renderDashboard();
 }
 
@@ -3372,8 +3550,8 @@ function renderServices() {
       <td>${statusBadge}</td>
       <td>
         <div class="row-actions">
+          <button class="btn btn-secondary btn-sm" onclick="openPriceModal('${s.id}')" title="Ár módosítása">Ár</button>
           <button class="btn btn-secondary btn-sm js-edit-btn" onclick="openServiceEdit('${s.id}')" title="Szerkesztés">✎</button>
-          <button class="btn btn-secondary btn-sm" onclick="openPriceModal('${s.id}')" title="Ár módosítása">✎ Ár</button>
           <button class="btn btn-danger btn-sm js-del-btn" onclick="deleteService('${s.id}')">×</button>
         </div>
       </td>
@@ -3569,7 +3747,9 @@ function renderDashboard() {
     const livePrice = getLivePrice(s.ticker);
     return a + s.qty * (livePrice || s.price);
   }, 0) : 0;
-  const stockCost = useStocks ? state.stocks.reduce((a,s)=>a+s.qty*s.avg,0) : 0;
+  const stockCost = useStocks
+    ? (stockInvestedHuf() ?? state.stocks.reduce((a,s)=>a+s.qty*s.avg,0))
+    : 0;
   const goldVal = useGold ? goldTotalValue() : 0;
   const goldCost = useGold ? goldTotalCost() : 0;
   const coins = calcCryptoPL();
@@ -3667,7 +3847,7 @@ function renderDashboard() {
   if (useCrypto) donutSegs.push({ label: 'Kripto',     value: cryptoOpen,  color: '#4FA7BD' });
   if (usePledge) donutSegs.push({ label: 'Zálog (−)',  value: totalPledge, color: '#8B6690' });
   if (useLoans)  donutSegs.push({ label: 'Hitel (−)',  value: totalLoan,   color: '#C24A3A' });
-  drawDonut(donutSegs, { label: 'Nettó vagyon', value: fmtCompact(netWorth) + ' Ft' });
+  drawDonut(donutSegs, { label: 'Teljes vagyon', value: fmtCompact(netWorth) + ' Ft' });
 
   const spot = state.goldSpot || 28000;
   const totalLiab = totalLoan + totalPledge;
@@ -3694,7 +3874,7 @@ function renderDashboard() {
       setCls('d-portfolio-rate-card', 'card card-stat-dark');
     }
   }
-  setTxt('d-portfolio-rate-sub', `${fmt(totalLiab)} tartozás / ${fmt(currentValue)} eszköz`);
+  setTxt('d-portfolio-rate-sub', 'Tartozás / eszköz');
 
   setTxt('d-unreal-pl', (unrealPL>=0?'+':'') + fmt(unrealPL));
   setCls('d-unreal-pl', 'stat-value ' + (unrealPL>=0?'green':'red'));
@@ -3802,10 +3982,12 @@ function renderDashboard() {
 function renderWatch() {
   const rb = document.getElementById('watch-refresh-bar');
   if (rb) rb.innerHTML = `
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px">
       <button class="btn btn-secondary btn-sm" onclick="refreshAllPrices()">Élő árfolyam frissítés</button>
       <span class="refresh-status" style="font-size:11px;color:var(--muted)"></span>
-    </div>`;
+    </div>
+    <div style="font-size:11.5px;margin-bottom:16px"><span id="fx-info"></span></div>`;
+  updateFxLabel();
   const coins = calcCryptoPL();
 
   const stockBox = document.getElementById('dash-stocks');
@@ -4129,11 +4311,66 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function afterDataLoaded() {
+  backfillCryptoNative();
   if (state.stocks.length || state.crypto.length || state.goldItems.length) {
     refreshAllPrices();
   } else {
     fetchFxRates().then(() => { updateStockLabels(); renderCrypto(); });
   }
+}
+
+function uiDialog(opts) {
+  return new Promise(resolve => {
+    const o = opts || {};
+    const wrap = document.createElement('div');
+    wrap.className = 'modal open';
+    const cancelBtn = o.showCancel
+      ? `<button class="btn btn-secondary btn-sm" data-act="cancel">${escHtml(o.cancelText || 'Mégsem')}</button>`
+      : '';
+    wrap.innerHTML = `
+      <div class="modal-card" style="max-width:400px">
+        <div class="section-title" style="font-size:16px;margin-bottom:10px">${escHtml(o.title || 'Megerősítés')}</div>
+        <div style="font-size:13px;line-height:1.6;white-space:pre-line">${escHtml(o.message || '')}</div>
+        ${o.detail ? `<div style="font-size:12.5px;color:var(--muted);line-height:1.6;margin-top:8px;white-space:pre-line">${escHtml(o.detail)}</div>` : ''}
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:20px;flex-wrap:wrap">
+          ${cancelBtn}
+          <button class="btn ${o.danger ? 'btn-danger' : ''} btn-sm" data-act="ok">${escHtml(o.confirmText || 'OK')}</button>
+        </div>
+      </div>`;
+    document.body.appendChild(wrap);
+    syncModalScrollLock();
+    const done = val => {
+      document.removeEventListener('keydown', onKey);
+      wrap.remove();
+      syncModalScrollLock();
+      resolve(val);
+    };
+    const onKey = e => {
+      if (e.key === 'Escape') { e.preventDefault(); done(false); }
+      else if (e.key === 'Enter') { e.preventDefault(); done(true); }
+    };
+    wrap.addEventListener('click', e => {
+      if (e.target === wrap) { done(false); return; }
+      const act = e.target.closest('[data-act]');
+      if (!act) return;
+      done(act.getAttribute('data-act') === 'ok');
+    });
+    document.addEventListener('keydown', onKey);
+    const ok = wrap.querySelector('[data-act="ok"]');
+    if (ok) ok.focus();
+  });
+}
+
+function uiConfirm(message, opts) {
+  const o = Object.assign({ showCancel: true, confirmText: 'Törlés', danger: true }, opts || {});
+  o.message = message;
+  return uiDialog(o);
+}
+
+function uiAlert(message, opts) {
+  const o = Object.assign({ showCancel: false, confirmText: 'Rendben', danger: false, title: 'Értesítés' }, opts || {});
+  o.message = message;
+  return uiDialog(o);
 }
 
 function escHtml(s) {

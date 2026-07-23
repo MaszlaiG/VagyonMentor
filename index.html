@@ -54,7 +54,7 @@
 
   <div class="grid g4" id="d-stat-grid" style="margin-bottom:16px">
     <div class="card card-stat-green" id="d-networth-card">
-      <div class="card-title">Nettó Vagyon</div>
+      <div class="card-title">Teljes Vagyon</div>
       <div class="stat-value green" id="d-networth">0 Ft</div>
     </div>
     <div class="card card-stat-cyan" id="d-current-card">
@@ -73,7 +73,7 @@
     <div class="card card-stat-dark" id="d-portfolio-rate-card">
       <div class="card-title">Portfólió Ráta</div>
       <div class="stat-value" id="d-portfolio-rate">0%</div>
-      <div class="stat-sub" id="d-portfolio-rate-sub">Tartozás a befektetett érték %-ában</div>
+      <div class="stat-sub" id="d-portfolio-rate-sub">Tartozás / eszköz</div>
     </div>
   </div>
 
@@ -121,12 +121,7 @@
     </div>
   </div>
 
-  <div class="card" id="d-div-tax-card" style="margin-bottom:16px">
-    <div class="card-title">Osztalék adózása (becsült)</div>
-    <div id="d-div-tax"></div>
-  </div>
-
-  <div class="grid g21" id="d-bottom-grid" style="margin-bottom:24px">
+  <div class="grid g21" id="d-bottom-grid" style="margin-bottom:16px">
     <div class="card" id="d-div-cal-card">
       <div class="card-title">Osztalék Naptár</div>
       <div id="div-calendar-dash"></div>
@@ -135,6 +130,11 @@
       <div class="card-title">Legnagyobb Pozíciók</div>
       <div id="d-top-holdings"></div>
     </div>
+  </div>
+
+  <div class="card" id="d-div-tax-card" style="margin-bottom:24px">
+    <div class="card-title">Osztalék adózása (becsült)</div>
+    <div id="d-div-tax"></div>
   </div>
 </div>
 
@@ -176,10 +176,6 @@
   <div>
     <div>
       <div id="stock-list-view">
-        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;font-size:11.5px">
-          <span id="fx-info"></span>
-          <button class="btn btn-secondary btn-sm" onclick="refreshFxNow()">Árfolyam frissítése</button>
-        </div>
         <div class="grid g4" style="margin-bottom:16px">
           <div class="card card-stat-purple">
             <div class="card-title">Befektetett</div>
@@ -199,7 +195,7 @@
           <div class="card card-stat-yellow">
             <div class="card-title">Éves osztalék</div>
             <div class="stat-value yellow" id="st-sum-div">0 Ft</div>
-            <div class="stat-sub" id="st-sum-div-net">Nettó érték: 0 Ft</div>
+            <div class="stat-sub" id="st-sum-div-usd"></div>
           </div>
         </div>
 
@@ -291,7 +287,7 @@
         </div>
         <div style="font-size:11px;color:var(--muted);margin-bottom:8px">A jelenlegi árat és az osztalékot a rendszer a ticker alapján automatikusan követi a Yahoo-ról.</div>
         <div id="st-fx-info" style="font-size:11px;color:var(--muted);margin-bottom:12px;display:none">
-          Az árak automatikusan HUF-ra lesznek átváltva rögzítéskor (1 USD ≈ <span id="st-fx-rate">360</span> Ft)
+          Az árak automatikusan HUF-ra lesznek átváltva rögzítéskor (1 USD ≈ <span id="st-fx-rate">—</span> Ft)
         </div>
         <div id="st-add-msg" style="font-size:12px;margin-bottom:10px;min-height:16px"></div>
         <button class="btn" id="st-add-btn" onclick="addStock()" style="width:100%">+ Hozzáadás</button>
@@ -313,6 +309,7 @@
         <div class="card card-stat-cyan">
           <div class="card-title">Bekerülési érték (nyitott)</div>
           <div class="stat-value cyan" id="cr-open">0 Ft</div>
+          <div class="stat-sub" id="cr-open-usd"></div>
         </div>
         <div class="card card-stat-cyan">
           <div class="card-title">Aktuális eladási érték</div>
@@ -321,6 +318,7 @@
         <div class="card card-stat-dark" id="cr-pl-card">
           <div class="card-title">P&amp;L</div>
           <div class="stat-value" id="cr-pl">0 Ft</div>
+          <div class="stat-sub" id="cr-pl-usd"></div>
         </div>
         <div class="card card-stat-dark" id="cr-yield-card">
           <div class="card-title">Hozam</div>
@@ -398,7 +396,7 @@
           </div>
         </div>
         <div id="cr-fx-info" style="font-size:11px;color:var(--muted);margin-bottom:12px;display:none">
-          Az ár és a díj a <strong>vétel dátumához</strong> tartozó (történeti) árfolyammal lesz HUF-ra váltva. Mai árfolyam: 1 <span id="cr-fx-cur">USD</span> ≈ <span id="cr-fx-rate">360</span> Ft
+          Az ár és a díj a <strong>vétel dátumához</strong> tartozó (történeti) árfolyammal lesz HUF-ra váltva. Mai árfolyam: 1 <span id="cr-fx-cur">USD</span> ≈ <span id="cr-fx-rate">—</span> Ft
         </div>
         <div style="font-size:11px;color:var(--muted);margin-bottom:10px">A teljes nevet és az élő árfolyamot a rendszer a coin szimbóluma alapján automatikusan lekéri (CoinGecko).</div>
         <button class="btn" id="crypto-submit-btn" onclick="addCryptoTrade()" style="width:100%">+ Vétel rögzítése</button>
