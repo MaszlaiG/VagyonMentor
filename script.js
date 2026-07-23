@@ -3530,7 +3530,11 @@ function renderServices() {
   let totalMonthly = 0, activeCount = 0;
   const charges = [];
 
-  tbody.innerHTML = state.services.map(s => {
+  tbody.innerHTML = [...state.services].sort((a, b) => {
+    const da = a.day || 99, db = b.day || 99;
+    if (da !== db) return da - db;
+    return (a.name || '').localeCompare(b.name || '', 'hu');
+  }).map(s => {
     const monthly = serviceMonthlyCost(s);
     if (s.active) {
       totalMonthly += monthly;
