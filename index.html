@@ -176,18 +176,25 @@
   <div>
     <div>
       <div id="stock-list-view">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;font-size:11.5px">
+          <span id="fx-info"></span>
+          <button class="btn btn-secondary btn-sm" onclick="refreshFxNow()">Árfolyam frissítése</button>
+        </div>
         <div class="grid g4" style="margin-bottom:16px">
           <div class="card card-stat-purple">
             <div class="card-title">Befektetett</div>
             <div class="stat-value purple" id="st-sum-invested">0 Ft</div>
+            <div class="stat-sub" id="st-sum-invested-usd"></div>
           </div>
           <div class="card card-stat-cyan">
             <div class="card-title">Jelenlegi érték</div>
             <div class="stat-value cyan" id="st-sum-current">0 Ft</div>
+            <div class="stat-sub" id="st-sum-current-usd"></div>
           </div>
           <div class="card card-stat-dark" id="st-sum-pl-card">
             <div class="card-title">P&amp;L</div>
             <div class="stat-value" id="st-sum-pl">0 Ft</div>
+            <div class="stat-sub" id="st-sum-pl-usd"></div>
           </div>
           <div class="card card-stat-yellow">
             <div class="card-title">Éves osztalék</div>

@@ -1072,3 +1072,31 @@ html[data-theme="lavender"] .modal-card { border-radius: 4px; }
   html[data-theme] .stat-value { font-size: 21px; }
   html[data-theme="sunset"] .stat-value { font-size: 24px; }
 }
+
+.usd-inline {
+  font-size: 0.5em;
+  font-weight: 500;
+  color: var(--muted);
+  letter-spacing: 0;
+  white-space: nowrap;
+  margin-left: 2px;
+}
+
+/* Modál: ne lehessen oldalra elcsúsztatni (a dátummezők intrinsic szélessége okozta) */
+.form-grid > * { min-width: 0; }
+input[type="date"], input[type="datetime-local"], input[type="time"], input[type="month"] {
+  min-width: 0;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.modal-card { overflow-x: hidden; }
+.modal { justify-content: safe center; align-items: safe center; }
+
+/* Nyitott modál mögött ne görögjön a háttéroldal */
+body.modal-open {
+  position: fixed;
+  left: 0;
+  right: 0;
+  width: 100%;
+  overflow: hidden;
+}

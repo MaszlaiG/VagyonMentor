@@ -61,6 +61,7 @@ auth.onAuthStateChanged(user => {
   if (user) {
     currentUid = user.uid;
     if (loginModal) loginModal.classList.remove('open');
+    if (typeof syncModalScrollLock === 'function') syncModalScrollLock();
 
     const userLabel = document.getElementById('logged-in-as');
     if (userLabel) userLabel.textContent = user.email || '';
@@ -86,6 +87,7 @@ auth.onAuthStateChanged(user => {
   } else {
     currentUid = null;
     if (loginModal) loginModal.classList.add('open');
+    if (typeof syncModalScrollLock === 'function') syncModalScrollLock();
   }
 });
 
@@ -308,6 +310,8 @@ function normalizeState() {
   if (state.usdHuf) usdHuf = state.usdHuf;
   if (state.eurHuf) eurHuf = state.eurHuf;
   if (state.fxUpdatedAt) fxUpdatedAt = state.fxUpdatedAt;
+  if (state.fxQuoteDate) fxQuoteDate = state.fxQuoteDate;
+  if (fxUpdatedAt && isNaN(Date.parse(fxUpdatedAt))) fxUpdatedAt = null;
 }
 
 function load() {
@@ -723,6 +727,14 @@ function fmtCur(n, cur) {
   return Math.round(n).toLocaleString('hu-HU') + ' Ft';
 }
 
+function usdFromHuf(huf, withSign) {
+  if (!usdHuf || !isFinite(usdHuf) || usdHuf <= 0) return '';
+  const v = huf / usdHuf;
+  const s = fmtCur(Math.abs(v), 'USD');
+  if (withSign) return (v >= 0 ? '+' : '-') + s;
+  return s;
+}
+
 function rateForCurrency(cur) {
   return cur === 'USD' ? usdHuf : (cur === 'EUR' ? eurHuf : 1);
 }
@@ -769,6 +781,7 @@ let usdHuf = 306;
 let eurHuf = 353;
 
 let fxUpdatedAt = null;
+let fxQuoteDate = null;
 
 async function fetchUsdHuf() {
   await fetchFxRates();
@@ -820,23 +833,22 @@ async function fetchJsonViaProxies(targetUrl, timeoutMs = 6000) {
 async function fetchStockPriceHuf(ticker, currency) {
   try {
     const hosts = ['query1.finance.yahoo.com', 'query2.finance.yahoo.com'];
-    let price = null;
+    let price = null, quoteCur = null;
     for (const host of hosts) {
       const url = `https://${host}/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=1d&_=${Date.now()}`;
       const data = await fetchJsonViaProxies(url);
-      price = data?.chart?.result?.[0]?.meta?.regularMarketPrice;
-      if (price) break;
+      const meta = data?.chart?.result?.[0]?.meta;
+      price = meta?.regularMarketPrice;
+      if (price) { quoteCur = (meta.currency || '').toUpperCase() || null; break; }
     }
     if (!price) return null;
-    if (currency === 'USD') return price * usdHuf;
-    if (currency === 'EUR') {
-      try {
-        const er = await fetch('https://api.frankfurter.app/latest?from=EUR&to=HUF');
-        const ed = await er.json();
-        return price * (ed.rates?.HUF || 390);
-      } catch(e) { return price * 390; }
-    }
-    return price;
+    let cur = quoteCur || currency;
+    if (cur === 'GBp') { price = price / 100; cur = 'GBP'; }
+    if (cur === 'USD') return price * usdHuf;
+    if (cur === 'EUR') return price * eurHuf;
+    if (cur === 'HUF') return price;
+    const fallback = currency === 'USD' ? usdHuf : (currency === 'EUR' ? eurHuf : 1);
+    return price * fallback;
   } catch(e) { return null; }
 }
 
@@ -1083,14 +1095,33 @@ function closeNav() {
   document.removeEventListener('click', navOutsideClick);
 }
 
+let _bodyScrollY = 0;
+function syncModalScrollLock() {
+  const rm = document.getElementById('redeem-modal');
+  const redeemOpen = !!rm && rm.style.display && rm.style.display !== 'none';
+  const anyOpen = !!document.querySelector('.modal.open') || redeemOpen;
+  const locked = document.body.classList.contains('modal-open');
+  if (anyOpen && !locked) {
+    _bodyScrollY = window.scrollY || window.pageYOffset || 0;
+    document.body.style.top = `-${_bodyScrollY}px`;
+    document.body.classList.add('modal-open');
+  } else if (!anyOpen && locked) {
+    document.body.classList.remove('modal-open');
+    document.body.style.top = '';
+    window.scrollTo(0, _bodyScrollY);
+  }
+}
+
 function openModal(id) {
   const m = document.getElementById(id);
   if (m) m.classList.add('open');
+  syncModalScrollLock();
 }
 
 function closeModal(id) {
   const m = document.getElementById(id);
   if (m) m.classList.remove('open');
+  syncModalScrollLock();
 }
 
 function updateStockLabels() {
@@ -1124,19 +1155,75 @@ function updateCryptoLabels() {
   }
 }
 
+function fxRateIsSane(usd, eur) {
+  return usd && isFinite(usd) && usd > 150 && usd < 900
+      && (!eur || (isFinite(eur) && eur > 150 && eur < 1000));
+}
+
 async function fetchFxRates() {
+  const url = 'https://api.frankfurter.app/latest?from=USD&to=HUF,EUR';
+  let d = null;
   try {
-    const r = await fetch('https://api.frankfurter.app/latest?from=USD&to=HUF,EUR');
-    const d = await r.json();
-    if (d.rates?.HUF) usdHuf = d.rates.HUF;
-    if (d.rates?.EUR) eurHuf = usdHuf / d.rates.EUR;
-    fxUpdatedAt = new Date().toLocaleTimeString('hu-HU');
-    state.usdHuf = usdHuf;
-    state.eurHuf = eurHuf;
-    state.fxUpdatedAt = fxUpdatedAt;
-    save();
-    return true;
-  } catch(e) { return false; }
+    const r = await fetch(url + '&_=' + Date.now(), { cache: 'no-store' });
+    if (r.ok) d = await r.json();
+  } catch (e) {  }
+  if (!d || !d.rates || !d.rates.HUF) {
+    try { d = await fetchJsonViaProxies(url); } catch (e) { d = null; }
+  }
+  if (!d || !d.rates || !d.rates.HUF) return false;
+
+  const newUsd = d.rates.HUF;
+  const newEur = d.rates.EUR ? newUsd / d.rates.EUR : eurHuf;
+  if (!fxRateIsSane(newUsd, newEur)) return false;
+
+  usdHuf = newUsd;
+  eurHuf = newEur;
+  fxUpdatedAt = new Date().toISOString();
+  fxQuoteDate = d.date || null;
+  state.usdHuf = usdHuf;
+  state.eurHuf = eurHuf;
+  state.fxUpdatedAt = fxUpdatedAt;
+  state.fxQuoteDate = fxQuoteDate;
+  save();
+  updateFxLabel();
+  return true;
+}
+
+async function refreshFxNow() {
+  const el = document.getElementById('fx-info');
+  if (el) el.textContent = 'Árfolyam lekérése…';
+  const ok = await fetchFxRates();
+  if (!ok && el) {
+    el.innerHTML = '<span style="color:var(--red)">Az árfolyam lekérése nem sikerült — a korábbi érték marad érvényben.</span>';
+    return;
+  }
+  updateFxLabel();
+  await refreshAllPrices();
+  renderAll();
+}
+
+function fxAgeHours() {
+  if (!fxUpdatedAt) return null;
+  const t = Date.parse(fxUpdatedAt);
+  if (isNaN(t)) return null;
+  return (Date.now() - t) / 36e5;
+}
+
+function updateFxLabel() {
+  const el = document.getElementById('fx-info');
+  if (!el) return;
+  if (!usdHuf) { el.textContent = ''; return; }
+  const age = fxAgeHours();
+  const stale = age === null || age > 24;
+  const rate = usdHuf.toLocaleString('hu-HU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  let when;
+  if (age === null) when = 'ismeretlen frissítés';
+  else if (age < 1) when = 'most frissítve';
+  else if (age < 24) when = Math.round(age) + ' órája frissítve';
+  else when = Math.round(age / 24) + ' napja frissítve';
+  const quote = fxQuoteDate ? ` · EKB jegyzés: ${fxQuoteDate}` : '';
+  el.innerHTML = `<span${stale ? ' style="color:var(--red)"' : ''}>1 USD = ${rate} Ft</span>`
+    + `<span style="color:var(--muted)"> · ${when}${quote}</span>`;
 }
 
 let fxHistoryCache = {};
@@ -1389,6 +1476,7 @@ function netDividend(gross) {
 
 function renderStocks() {
   const tbody = document.getElementById('stock-tbody');
+  updateFxLabel();
 
   document.getElementById('stock-refresh-bar').innerHTML = '';
 
@@ -1400,7 +1488,10 @@ function renderStocks() {
     plEl0.textContent = fmt(0);
     plEl0.className = 'stat-value';
     document.getElementById('st-sum-pl-card').className = 'card card-stat-dark';
-    document.getElementById('st-sum-div').textContent = fmt(0);
+    document.getElementById('st-sum-div').innerHTML = fmt(0);
+    ['st-sum-invested-usd','st-sum-current-usd','st-sum-pl-usd'].forEach(id => {
+      const el = document.getElementById(id); if (el) el.textContent = '';
+    });
     return;
   }
 
@@ -1465,7 +1556,16 @@ function renderStocks() {
   plEl.textContent = (totalPL>=0?'+':'') + fmt(totalPL);
   plEl.className = 'stat-value ' + (totalPL>=0?'green':'red');
   document.getElementById('st-sum-pl-card').className = 'card ' + (totalPL>=0?'card-stat-green':'card-stat-red');
-  document.getElementById('st-sum-div').textContent = fmt(totalDiv);
+  const usdInv = usdFromHuf(totalInvested);
+  const usdCur = usdFromHuf(totalCurrent);
+  const usdPL  = usdFromHuf(totalPL, true);
+  const setSub = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
+  setSub('st-sum-invested-usd', usdInv);
+  setSub('st-sum-current-usd', usdCur);
+  setSub('st-sum-pl-usd', usdPL);
+  const usdDiv = usdFromHuf(totalDiv);
+  document.getElementById('st-sum-div').innerHTML =
+    escHtml(fmt(totalDiv)) + (usdDiv ? ` <span class="usd-inline">${escHtml(usdDiv)}</span>` : '');
   const stNetEl = document.getElementById('st-sum-div-net');
   if (stNetEl) stNetEl.textContent = 'Nettó érték: ' + fmt(netDividend(totalDiv));
 
@@ -2748,11 +2848,13 @@ function openRedeemModal(id) {
   amtEl.value = Math.round(d.currentDebt).toLocaleString('hu-HU');
   document.getElementById('redeem-error').style.display = 'none';
   document.getElementById('redeem-modal').style.display = 'flex';
+  syncModalScrollLock();
 }
 
 function closeRedeemModal() {
   document.getElementById('redeem-modal').style.display = 'none';
   redeemPledgeId = null;
+  syncModalScrollLock();
 }
 
 function confirmRedeem() {
