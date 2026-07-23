@@ -1,8 +1,36 @@
+const THEMES = [
+  { key: 'forest',   label: 'Klasszikus' },
+  { key: 'ocean',    label: 'Kompakt' },
+  { key: 'sunset',   label: 'Lágy' },
+  { key: 'graphite', label: 'Kontúros' },
+  { key: 'lavender', label: 'Terminál' }
+];
+
+function currentAppearance() {
+  try { return (state && state.ui && state.ui.appearance) || 'auto'; } catch (e) { return 'auto'; }
+}
+
 function applyThemeByTime() {
-  const h = new Date().getHours();
-  const isDark = h >= 19 || h < 6;
+  const mode = currentAppearance();
+  let isDark;
+  if (mode === 'light') isDark = false;
+  else if (mode === 'dark') isDark = true;
+  else {
+    const h = new Date().getHours();
+    isDark = h >= 19 || h < 6;
+  }
   document.documentElement.classList.toggle('dark', isDark);
 }
+
+function applyTheme() {
+  let key = 'forest';
+  try { if (state && state.ui && state.ui.theme) key = state.ui.theme; } catch (e) {}
+  if (!THEMES.some(t => t.key === key)) key = 'forest';
+  if (key === 'forest') document.documentElement.removeAttribute('data-theme');
+  else document.documentElement.setAttribute('data-theme', key);
+  applyThemeByTime();
+}
+
 applyThemeByTime();
 setInterval(applyThemeByTime, 5 * 60 * 1000);
 
@@ -48,6 +76,10 @@ auth.onAuthStateChanged(user => {
         renderAll();
         renderModuleSettings();
         applyModuleVisibility();
+        renderActionSettings();
+        applyActionVisibility();
+        applyTheme();
+        renderThemeSettings();
         if (typeof afterDataLoaded === 'function') afterDataLoaded();
       });
     });
@@ -268,6 +300,11 @@ function normalizeState() {
   state.taxSettings.szocho = Number(state.taxSettings.szocho) || 0;
   if (!state.modules || typeof state.modules !== 'object') state.modules = { gold: true, stocks: true, crypto: true, pledge: true, loans: true, services: true };
   ['gold','stocks','crypto','pledge','loans','services'].forEach(k => { if (state.modules[k] === undefined) state.modules[k] = true; });
+  if (!state.ui || typeof state.ui !== 'object') state.ui = {};
+  if (state.ui.editBtns === undefined) state.ui.editBtns = true;
+  if (state.ui.delBtns === undefined) state.ui.delBtns = true;
+  if (!state.ui.theme) state.ui.theme = 'forest';
+  if (!state.ui.appearance) state.ui.appearance = 'auto';
   if (state.usdHuf) usdHuf = state.usdHuf;
   if (state.eurHuf) eurHuf = state.eurHuf;
   if (state.fxUpdatedAt) fxUpdatedAt = state.fxUpdatedAt;
@@ -937,6 +974,52 @@ function renderModuleSettings() {
   set('mod-pledge','pledge'); set('mod-loans','loans'); set('mod-services','services');
 }
 
+function renderThemeSettings() {
+  const ui = state.ui || {};
+  const theme = ui.theme || 'forest';
+  document.querySelectorAll('input[name="theme-opt"]').forEach(i => { i.checked = (i.value === theme); });
+  const ap = document.getElementById('ui-appearance');
+  if (ap) ap.value = ui.appearance || 'auto';
+}
+
+function updateTheme(key) {
+  if (!THEMES.some(t => t.key === key)) return;
+  state.ui = Object.assign({}, state.ui, { theme: key });
+  save();
+  applyTheme();
+  renderThemeSettings();
+  accMsg('acc-theme-msg', '✓ Téma elmentve.', false);
+}
+
+function updateAppearance() {
+  const el = document.getElementById('ui-appearance');
+  const val = el ? el.value : 'auto';
+  state.ui = Object.assign({}, state.ui, { appearance: val });
+  save();
+  applyThemeByTime();
+  accMsg('acc-theme-msg', '✓ Megjelenés elmentve.', false);
+}
+
+function applyActionVisibility() {
+  const ui = state.ui || {};
+  document.body.classList.toggle('hide-edit-btns', ui.editBtns === false);
+  document.body.classList.toggle('hide-del-btns', ui.delBtns === false);
+}
+
+function renderActionSettings() {
+  const ui = state.ui || {};
+  const e = document.getElementById('ui-edit-btns'); if (e) e.checked = ui.editBtns !== false;
+  const d = document.getElementById('ui-del-btns');  if (d) d.checked = ui.delBtns  !== false;
+}
+
+function updateActionButtons() {
+  const val = id => { const el = document.getElementById(id); return el ? el.checked : true; };
+  state.ui = Object.assign({}, state.ui, { editBtns: val('ui-edit-btns'), delBtns: val('ui-del-btns') });
+  save();
+  applyActionVisibility();
+  accMsg('acc-ui-msg', '✓ Beállítás elmentve.', false);
+}
+
 function updateModules() {
   const val = id => { const el = document.getElementById(id); return el ? el.checked : true; };
   state.modules = {
@@ -965,6 +1048,10 @@ function showTab(id) {
     if (label) label.textContent = activeBtn.textContent.trim();
   }
   closeNav();
+  if (typeof closeLoanDetail === 'function') closeLoanDetail();
+  if (typeof closeStockDetail === 'function') closeStockDetail();
+  if (typeof closeCryptoDetail === 'function') closeCryptoDetail();
+  if (typeof closePledgeDetail === 'function') closePledgeDetail();
   renderAll();
 }
 
@@ -1093,6 +1180,34 @@ async function resolveTicker(query) {
   } catch(e) { return null; }
 }
 
+let stockEditId = null;
+function openStockAdd() {
+  stockEditId = null;
+  ['st-name','st-qty','st-avg'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  const cur = document.getElementById('st-currency'); if (cur) cur.value = 'USD';
+  const dt = document.getElementById('st-date'); if (dt) dt.value = now();
+  const msg = document.getElementById('st-add-msg'); if (msg) msg.textContent = '';
+  const t = document.getElementById('stock-modal-title'); if (t) t.textContent = 'Részvény hozzáadása';
+  const b = document.getElementById('st-add-btn'); if (b) b.textContent = '+ Hozzáadás';
+  openModal('stock-modal');
+}
+function openStockEdit(id) {
+  const s = state.stocks.find(x => x.id === id);
+  if (!s) return;
+  stockEditId = id;
+  const rate = rateForCurrency(s.currency || 'HUF');
+  const avgN = (s.avgNative != null) ? s.avgNative : (rate ? s.avg / rate : s.avg);
+  document.getElementById('st-name').value = s.ticker || '';
+  document.getElementById('st-qty').value = s.qty || '';
+  const cur = document.getElementById('st-currency'); if (cur) cur.value = s.currency || 'USD';
+  document.getElementById('st-avg').value = avgN || '';
+  const dt = document.getElementById('st-date'); if (dt) dt.value = s.buyDate || now();
+  const msg = document.getElementById('st-add-msg'); if (msg) msg.textContent = '';
+  const t = document.getElementById('stock-modal-title'); if (t) t.textContent = 'Részvény szerkesztése';
+  const b = document.getElementById('st-add-btn'); if (b) b.textContent = 'Mentés';
+  openModal('stock-modal');
+}
+
 async function addStock() {
   const ticker = (document.getElementById('st-name').value || '').trim().toUpperCase();
   const qty = parseFloat(document.getElementById('st-qty').value)||0;
@@ -1113,25 +1228,32 @@ async function addStock() {
 
   const fxRate = await fxRateForDate(currency, buyDate);
   const avg = avgNative * fxRate;
-  state.stocks.push({
-    id: uid(),
-    ticker,
-    name,
-    qty, avg, avgNative,
-    price: avg,
-    divYield: null,
-    divType: 'cash',
-    divAuto: true,
-    currency, buyDate
-  });
+  if (stockEditId) {
+    const s = state.stocks.find(x => x.id === stockEditId);
+    if (s) Object.assign(s, { ticker, name: name || s.name || '', qty, avg, avgNative, currency, buyDate });
+  } else {
+    state.stocks.push({
+      id: uid(),
+      ticker,
+      name,
+      qty, avg, avgNative,
+      price: avg,
+      divYield: null,
+      divType: 'cash',
+      divAuto: true,
+      currency, buyDate
+    });
+  }
   save();
+  stockEditId = null;
 
   document.getElementById('st-name').value = '';
   document.getElementById('st-qty').value = '';
   document.getElementById('st-avg').value = '';
   document.getElementById('st-date').value = now();
   setMsg('');
-  if (btn) btn.disabled = false;
+  if (btn) { btn.disabled = false; btn.textContent = '+ Hozzáadás'; }
+  const t = document.getElementById('stock-modal-title'); if (t) t.textContent = 'Részvény hozzáadása';
   closeModal('stock-modal');
   renderAll();
   refreshAllPrices();
@@ -1490,7 +1612,7 @@ function buildStockDetailHTML(ticker) {
       <td>${fmtCur(invN, cur)}</td>
       <td class="cyan">${fmtCur(curN, cur)}</td>
       <td class="${plN>=0?'green':'red'}">${plN>=0?'+':''}${fmtCur(plN, cur)} <span style="font-size:10px">(${plPct.toFixed(1)}%)</span></td>
-      <td><button class="btn btn-sm btn-secondary" onclick="deleteStock('${l.id}')">Téves rögzítés</button></td>
+      <td><div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn btn-sm btn-secondary js-edit-btn" onclick="openStockEdit('${l.id}')" title="Szerkesztés">✎</button><button class="btn btn-sm btn-secondary js-del-btn" onclick="deleteStock('${l.id}')">Téves rögzítés</button></div></td>
     </tr>`;
   }).join('');
 
@@ -1554,6 +1676,34 @@ async function resolveCryptoName(coin) {
   } catch (e) { return ''; }
 }
 
+let cryptoEditId = null;
+function openCryptoAdd() {
+  cryptoEditId = null;
+  ['cr-coin','cr-qty','cr-price','cr-fee'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  const cur = document.getElementById('cr-currency'); if (cur) cur.value = 'USD';
+  const dt = document.getElementById('cr-date'); if (dt) dt.value = now();
+  const t = document.getElementById('crypto-modal-title'); if (t) t.textContent = 'Vétel rögzítése';
+  const b = document.getElementById('crypto-submit-btn'); if (b) b.textContent = '+ Vétel rögzítése';
+  openModal('crypto-modal');
+}
+function openCryptoEdit(id) {
+  const tr = state.crypto.find(x => x.id === id);
+  if (!tr) return;
+  if (tr.type && tr.type !== 'buy') return;
+  cryptoEditId = id;
+  const rate = rateForCurrency(tr.currency || 'HUF');
+  const toN = v => rate ? v / rate : v;
+  document.getElementById('cr-coin').value = tr.coin || '';
+  const cur = document.getElementById('cr-currency'); if (cur) cur.value = tr.currency || 'USD';
+  document.getElementById('cr-qty').value = tr.qty || '';
+  document.getElementById('cr-price').value = toN(tr.price) || '';
+  document.getElementById('cr-fee').value = tr.fee ? toN(tr.fee) : '';
+  const dt = document.getElementById('cr-date'); if (dt) dt.value = tr.date || now();
+  const t = document.getElementById('crypto-modal-title'); if (t) t.textContent = 'Vétel szerkesztése';
+  const b = document.getElementById('crypto-submit-btn'); if (b) b.textContent = 'Mentés';
+  openModal('crypto-modal');
+}
+
 async function addCryptoTrade() {
   const coin = document.getElementById('cr-coin').value.trim().toUpperCase();
   const type = 'buy';
@@ -1567,9 +1717,17 @@ async function addCryptoTrade() {
   const fxRate = await fxRateForDate(currency, date);
   const price = priceNative * fxRate;
   const fee = feeNative * fxRate;
-  state.crypto.push({ id:uid(), coin, name, type, qty, price, date, fee, currency });
+  if (cryptoEditId) {
+    const tr = state.crypto.find(x => x.id === cryptoEditId);
+    if (tr) Object.assign(tr, { coin, name: name || tr.name, type, qty, price, date, fee, currency });
+  } else {
+    state.crypto.push({ id:uid(), coin, name, type, qty, price, date, fee, currency });
+  }
   save();
+  cryptoEditId = null;
   ['cr-coin','cr-qty','cr-price','cr-fee'].forEach(id=>document.getElementById(id).value='');
+  const b = document.getElementById('crypto-submit-btn'); if (b) b.textContent = '+ Vétel rögzítése';
+  const t = document.getElementById('crypto-modal-title'); if (t) t.textContent = 'Vétel rögzítése';
   closeModal('crypto-modal');
   renderAll();
 }
@@ -1915,7 +2073,7 @@ function buildCryptoDetailHTML(coin) {
       <td>${fmtCur(invN, cur)}</td>
       <td class="cyan">${fmtCur(valN, cur)}</td>
       <td class="${plN>=0?'green':'red'}">${plN>=0?'+':''}${fmtCur(plN, cur)} <span style="font-size:10px">(${plPct.toFixed(1)}%)</span></td>
-      <td><button class="btn btn-sm btn-secondary" onclick="deleteCryptoTrade('${l.id}')">Téves rögzítés</button></td>
+      <td><div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn btn-sm btn-secondary js-edit-btn" onclick="openCryptoEdit('${l.id}')" title="Szerkesztés">✎</button><button class="btn btn-sm btn-secondary js-del-btn" onclick="deleteCryptoTrade('${l.id}')">Téves rögzítés</button></div></td>
     </tr>`;
   }).join('') || '<tr><td colspan="7" style="color:var(--muted);text-align:center;padding:16px">Nincs nyitott vétel</td></tr>';
 
@@ -2176,6 +2334,19 @@ function calcRemaining(l) {
 
 let loanEditId = null;
 
+function loanInterestPaid(l) {
+  const paidSet = state.paidInstallments[l.id] || {};
+  const monthlyRate = l.rate / 100 / 12;
+  let balance = l.orig, interestPaid = 0;
+  for (let i = 0; i < l.months; i++) {
+    const interest = monthlyRate > 0 ? balance * monthlyRate : 0;
+    const principal = l.monthly - interest;
+    balance = Math.max(0, balance - principal);
+    if (paidSet[i+1]) interestPaid += interest;
+  }
+  return interestPaid;
+}
+
 function resetLoanForm() {
   ['ln-name','ln-orig','ln-start','ln-months','ln-payday','ln-first','ln-rate','ln-thm','ln-monthly','ln-end'].forEach(id => {
     const el = document.getElementById(id);
@@ -2256,7 +2427,7 @@ const FREQ_LABEL = { monthly: 'Havi', quarterly: 'Negyedéves', yearly: 'Éves' 
 
 function renderLoans() {
   const container = document.getElementById('loan-cards');
-  let totalRemain = 0, totalMonthly = 0, sumOrig = 0, sumRepayAll = 0;
+  let totalRemain = 0, totalMonthly = 0, sumOrig = 0, sumRepayAll = 0, sumInterestPaid = 0;
 
   if (!state.loans.length) {
     container.innerHTML = '<div class="card" style="color:var(--muted);text-align:center;padding:32px">Nincs rögzített hitel</div>';
@@ -2270,6 +2441,7 @@ function renderLoans() {
       totalMonthly += l.monthly;
       sumOrig      += l.orig;
       sumRepayAll  += l.monthly * l.months;
+      sumInterestPaid += loanInterestPaid(l);
 
       let nextPayment = '—';
       const paidSet = state.paidInstallments[l.id] || {};
@@ -2297,8 +2469,8 @@ function renderLoans() {
               </div>
             </div>
             <div style="display:flex;gap:8px;flex-wrap:wrap">
-              <button class="btn btn-secondary btn-sm" onclick="openLoanEdit('${l.id}')">✎ Szerkesztés</button>
-              <button class="btn btn-danger btn-sm" onclick="deleteLoan('${l.id}')">× Törlés</button>
+              <button class="btn btn-secondary btn-sm js-edit-btn" onclick="openLoanEdit('${l.id}')" title="Szerkesztés">✎</button>
+              <button class="btn btn-danger btn-sm js-del-btn" onclick="deleteLoan('${l.id}')" title="Törlés">×</button>
             </div>
           </div>
 
@@ -2348,13 +2520,12 @@ function renderLoans() {
   document.getElementById('ln-sum-remain').textContent = fmt(totalRemain);
   document.getElementById('ln-sum-monthly').textContent = fmt(totalMonthly);
   document.getElementById('ln-sum-yearly').textContent = fmt(totalMonthly * 12);
-  const lnFeeTotal = sumOrig - sumRepayAll;
-  const lnFeeSoFar = sumOrig - totalRemain;
+  const lnFeeTotal = sumRepayAll - sumOrig;
   const lnFeeEl = document.getElementById('ln-sum-fee');
   lnFeeEl.textContent = fmt(lnFeeTotal);
-  lnFeeEl.className = 'stat-value ' + (lnFeeTotal < 0 ? 'red' : 'green');
+  lnFeeEl.className = 'stat-value red';
   const lnFeeSubEl = document.getElementById('ln-sum-fee-sofar');
-  if (lnFeeSubEl) lnFeeSubEl.textContent = `Eddig: ${fmt(lnFeeSoFar)}`;
+  if (lnFeeSubEl) lnFeeSubEl.textContent = `Eddig kifizetve: ${fmt(sumInterestPaid)}`;
 }
 
 const PURITY_FACTOR = { '999.9': 0.9999, '916': 0.916, '750': 0.750, '585': 0.585, 'egyéb': 1 };
@@ -2362,6 +2533,29 @@ const PURITY_FACTOR = { '999.9': 0.9999, '916': 0.916, '750': 0.750, '585': 0.58
 function goldItemValue(item, spot) {
   const factor = PURITY_FACTOR[item.purity] ?? 1;
   return item.grams * spot * factor;
+}
+
+let goldEditId = null;
+function openGoldAdd() {
+  goldEditId = null;
+  ['gd-name','gd-code','gd-grams','gd-cost'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  document.getElementById('gd-date').value = now();
+  const t = document.getElementById('gold-modal-title'); if (t) t.textContent = 'Aranytétel hozzáadása';
+  const b = document.getElementById('gold-submit-btn'); if (b) b.textContent = '+ Hozzáadás';
+  openModal('gold-modal');
+}
+function openGoldEdit(id) {
+  const g = state.goldItems.find(x => x.id === id);
+  if (!g) return;
+  goldEditId = id;
+  const setV = (elId,v)=>{const el=document.getElementById(elId); if(el) el.value = (v===undefined||v===null)?'':v;};
+  setV('gd-name', g.name); setV('gd-code', g.code); setV('gd-form', g.form);
+  setV('gd-purity', g.purity); setV('gd-grams', g.grams);
+  setV('gd-cost', g.cost ? g.cost.toLocaleString('hu-HU') : '');
+  setV('gd-date', g.date);
+  const t = document.getElementById('gold-modal-title'); if (t) t.textContent = 'Aranytétel szerkesztése';
+  const b = document.getElementById('gold-submit-btn'); if (b) b.textContent = 'Mentés';
+  openModal('gold-modal');
 }
 
 function addGold() {
@@ -2373,8 +2567,14 @@ function addGold() {
   const cost   = parseAmount('gd-cost');
   const date   = document.getElementById('gd-date').value || now();
   if (!grams) return;
-  state.goldItems.push({ id:uid(), name: name||'Arany', code, form, purity, grams, cost, date });
+  if (goldEditId) {
+    const g = state.goldItems.find(x => x.id === goldEditId);
+    if (g) Object.assign(g, { name: name||'Arany', code, form, purity, grams, cost, date });
+  } else {
+    state.goldItems.push({ id:uid(), name: name||'Arany', code, form, purity, grams, cost, date });
+  }
   save();
+  goldEditId = null;
   ['gd-name','gd-code','gd-grams','gd-cost'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('gd-date').value = now();
   closeModal('gold-modal');
@@ -2457,6 +2657,36 @@ function updatePledgeNet() {
   }
 }
 
+let pledgeEditId = null;
+function openPledgeAdd() {
+  pledgeEditId = null;
+  ['pl-principal','pl-fee','pl-rate','pl-thm','pl-end','pl-ticket'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  const term = document.getElementById('pl-term'); if (term) term.value = '';
+  const start = document.getElementById('pl-start'); if (start) start.value = '';
+  document.querySelectorAll('#pl-gold input:checked').forEach(i => i.checked = false);
+  const info = document.getElementById('pl-end-info'); if (info) info.textContent = '';
+  const net = document.getElementById('pl-net-info'); if (net) net.textContent = '';
+  const gsel = document.getElementById('pl-gold-wrap'); if (gsel) gsel.style.display = '';
+  const t = document.getElementById('pledge-modal-title'); if (t) t.textContent = 'Zálogba adás';
+  const b = document.getElementById('pledge-submit-btn'); if (b) b.textContent = '+ Zálogba adás';
+  openModal('pledge-modal');
+}
+function openPledgeEdit(id) {
+  const p = state.pledges.find(x => x.id === id);
+  if (!p) return;
+  pledgeEditId = id;
+  const setV = (elId,v)=>{const el=document.getElementById(elId); if(el) el.value=(v===undefined||v===null)?'':v;};
+  setV('pl-ticket', p.ticketNo);
+  setV('pl-principal', p.principal ? p.principal.toLocaleString('hu-HU') : '');
+  setV('pl-fee', p.feePct); setV('pl-start', p.start); setV('pl-term', p.days);
+  setV('pl-rate', p.rate); setV('pl-thm', p.thm);
+  const gsel = document.getElementById('pl-gold-wrap'); if (gsel) gsel.style.display = 'none';
+  const t = document.getElementById('pledge-modal-title'); if (t) t.textContent = 'Zálog szerkesztése';
+  const b = document.getElementById('pledge-submit-btn'); if (b) b.textContent = 'Mentés';
+  openModal('pledge-modal');
+  calcPledgeEndDate();
+}
+
 function addPledge() {
   const goldIds   = [...document.querySelectorAll('#pl-gold input:checked')].map(i => i.value);
   const ticketNo  = (document.getElementById('pl-ticket').value || '').trim();
@@ -2467,20 +2697,27 @@ function addPledge() {
   const rate      = parseFloat(document.getElementById('pl-rate').value)||0;
   const thm       = parseFloat(document.getElementById('pl-thm').value)||0;
   if (!principal || !days) return;
-  const goldNames = goldIds.map(id => {
-    const g = state.goldItems.find(x => x.id === id);
-    return g ? g.name : '—';
-  });
   const endD = pledgeAddDays(start, days - 1);
   const end = endD ? toLocalDateStr(endD) : '';
-  state.pledges.push({ id:uid(), goldIds, goldNames, ticketNo, principal, feePct, start, days, rate, thm, end });
+  if (pledgeEditId) {
+    const p = state.pledges.find(x => x.id === pledgeEditId);
+    if (p) Object.assign(p, { ticketNo, principal, feePct, start, days, rate, thm, end });
+  } else {
+    const goldNames = goldIds.map(id => {
+      const g = state.goldItems.find(x => x.id === id);
+      return g ? g.name : '—';
+    });
+    state.pledges.push({ id:uid(), goldIds, goldNames, ticketNo, principal, feePct, start, days, rate, thm, end });
+  }
   save();
+  pledgeEditId = null;
   ['pl-principal','pl-fee','pl-rate','pl-thm','pl-end','pl-ticket'].forEach(id => {
     const el = document.getElementById(id); if (el) el.value = '';
   });
   document.getElementById('pl-end-info').textContent = '';
   document.getElementById('pl-net-info').textContent = '';
   const goldDd = document.querySelector('.pl-gold-dd'); if (goldDd) goldDd.removeAttribute('open');
+  const gsel = document.getElementById('pl-gold-wrap'); if (gsel) gsel.style.display = '';
   closeModal('pledge-modal');
   renderAll();
 }
@@ -2713,9 +2950,12 @@ function renderPledges() {
     else if (p.end && p.end < today) badge = `<span class="badge badge-red">lejárt</span>`;
     else badge = `<span class="badge badge-green">aktív</span>`;
 
-    const headerBtn = redeemed
-      ? `<button class="btn btn-danger btn-sm" onclick="deletePledge('${p.id}')">× Törlés</button>`
-      : `<button class="btn btn-sm" onclick="openRedeemModal('${p.id}')">Kiváltás</button>`;
+    const headerBtn = `<div style="display:flex;gap:8px;flex-wrap:wrap">`
+      + `<button class="btn btn-secondary btn-sm js-edit-btn" onclick="openPledgeEdit('${p.id}')" title="Szerkesztés">✎</button>`
+      + (redeemed
+          ? `<button class="btn btn-danger btn-sm js-del-btn" onclick="deletePledge('${p.id}')" title="Törlés">×</button>`
+          : `<button class="btn btn-sm" onclick="openRedeemModal('${p.id}')">Kiváltás</button>`)
+      + `</div>`;
 
     const redeemRow = redeemed
       ? `<div class="alert" style="margin:0 0 16px;color:var(--purple);background:rgba(139,105,143,0.09);border-color:rgba(139,105,143,0.3)">
@@ -2857,7 +3097,7 @@ function renderGold() {
       const ticket = pledgeTicketForGold(g.id);
       pledgedRows.push(`<tr>${commonCells(g, value, pl)}<td><span class="badge badge-purple">${ticket ? escHtml(ticket) : '—'}</span></td></tr>`);
     } else {
-      freeRows.push(`<tr>${commonCells(g, value, pl)}<td><button class="btn btn-sm" onclick="openGoldSell('${g.id}')">Eladás</button></td></tr>`);
+      freeRows.push(`<tr>${commonCells(g, value, pl)}<td><div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn btn-sm btn-secondary js-edit-btn" onclick="openGoldEdit('${g.id}')" title="Szerkesztés">✎</button><button class="btn btn-sm" onclick="openGoldSell('${g.id}')">Eladás</button></div></td></tr>`);
     }
   });
 
@@ -2934,6 +3174,31 @@ function serviceMonthlyCost(s) {
   return s.amount * (CYCLE_TO_MONTHLY[s.cycle] ?? 1);
 }
 
+let serviceEditId = null;
+function openServiceAdd() {
+  serviceEditId = null;
+  ['sv-name','sv-amount','sv-day'].forEach(id => document.getElementById(id).value = '');
+  document.querySelectorAll('#sv-cat input:checked').forEach(i => i.checked = false);
+  const cyc = document.getElementById('sv-cycle'); if (cyc) cyc.value = 'monthly';
+  const t = document.getElementById('service-modal-title'); if (t) t.textContent = 'Szolgáltatás rögzítése';
+  const b = document.getElementById('service-submit-btn'); if (b) b.textContent = '+ Hozzáadás';
+  openModal('service-modal');
+}
+function openServiceEdit(id) {
+  const s = state.services.find(x => x.id === id);
+  if (!s) return;
+  serviceEditId = id;
+  document.getElementById('sv-name').value = s.name || '';
+  document.getElementById('sv-amount').value = s.amount ? s.amount.toLocaleString('hu-HU') : '';
+  const cyc = document.getElementById('sv-cycle'); if (cyc) cyc.value = s.cycle || 'monthly';
+  document.getElementById('sv-day').value = s.day || '';
+  const cats = Array.isArray(s.cat) ? s.cat : (s.cat ? [s.cat] : []);
+  document.querySelectorAll('#sv-cat input').forEach(i => { i.checked = cats.includes(i.value); });
+  const t = document.getElementById('service-modal-title'); if (t) t.textContent = 'Szolgáltatás szerkesztése';
+  const b = document.getElementById('service-submit-btn'); if (b) b.textContent = 'Mentés';
+  openModal('service-modal');
+}
+
 function addService() {
   const name    = document.getElementById('sv-name').value.trim();
   const cat     = [...document.querySelectorAll('#sv-cat input:checked')].map(i => i.value);
@@ -2941,8 +3206,14 @@ function addService() {
   const cycle   = document.getElementById('sv-cycle').value;
   const day     = parseInt(document.getElementById('sv-day').value)||0;
   if (!name || !amount) return;
-  state.services.push({ id:uid(), name, cat, amount, cycle, day, active:true });
+  if (serviceEditId) {
+    const s = state.services.find(x => x.id === serviceEditId);
+    if (s) Object.assign(s, { name, cat, amount, cycle, day });
+  } else {
+    state.services.push({ id:uid(), name, cat, amount, cycle, day, active:true });
+  }
   save();
+  serviceEditId = null;
   ['sv-name','sv-amount','sv-day'].forEach(id => document.getElementById(id).value = '');
   document.querySelectorAll('#sv-cat input:checked').forEach(i => i.checked = false);
   closeModal('service-modal');
@@ -2999,8 +3270,9 @@ function renderServices() {
       <td>${statusBadge}</td>
       <td>
         <div class="row-actions">
+          <button class="btn btn-secondary btn-sm js-edit-btn" onclick="openServiceEdit('${s.id}')" title="Szerkesztés">✎</button>
           <button class="btn btn-secondary btn-sm" onclick="openPriceModal('${s.id}')" title="Ár módosítása">✎ Ár</button>
-          <button class="btn btn-danger btn-sm" onclick="deleteService('${s.id}')">×</button>
+          <button class="btn btn-danger btn-sm js-del-btn" onclick="deleteService('${s.id}')">×</button>
         </div>
       </td>
     </tr>`;

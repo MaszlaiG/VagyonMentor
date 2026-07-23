@@ -170,7 +170,7 @@
 <div class="tab-content" id="tab-portfolio">
   <div class="section-header">
     <div class="section-title">Részvényportfólió</div>
-    <button class="btn" id="stock-add-btn" onclick="openModal('stock-modal')">+ Részvény rögzítése</button>
+    <button class="btn" id="stock-add-btn" onclick="openStockAdd()">+ Részvény rögzítése</button>
   </div>
 
   <div>
@@ -253,7 +253,7 @@
     <div class="modal" id="stock-modal" onclick="if(event.target===this)closeModal('stock-modal')">
       <div class="modal-card">
         <div class="modal-head">
-          <div class="section-title" style="font-size:18px">Részvény hozzáadása</div>
+          <div class="section-title" style="font-size:18px" id="stock-modal-title">Részvény hozzáadása</div>
           <button class="btn btn-secondary btn-sm" onclick="closeModal('stock-modal')">✕</button>
         </div>
         <div class="form-grid fg2" style="margin-bottom:12px">
@@ -296,7 +296,7 @@
 <div class="tab-content" id="tab-crypto">
   <div class="section-header">
     <div class="section-title">Kriptovaluta Kereskedés</div>
-    <button class="btn" id="crypto-add-btn" onclick="openModal('crypto-modal')">+ Vétel rögzítése</button>
+    <button class="btn" id="crypto-add-btn" onclick="openCryptoAdd()">+ Vétel rögzítése</button>
   </div>
 
   <div>
@@ -357,7 +357,7 @@
     <div class="modal" id="crypto-modal" onclick="if(event.target===this)closeModal('crypto-modal')">
       <div class="modal-card">
         <div class="modal-head">
-          <div class="section-title" style="font-size:18px">Vétel rögzítése</div>
+          <div class="section-title" style="font-size:18px" id="crypto-modal-title">Vétel rögzítése</div>
           <button class="btn btn-secondary btn-sm" onclick="closeModal('crypto-modal')">✕</button>
         </div>
         <div class="form-grid fg2" style="margin-bottom:12px">
@@ -394,7 +394,7 @@
           Az ár és a díj a <strong>vétel dátumához</strong> tartozó (történeti) árfolyammal lesz HUF-ra váltva. Mai árfolyam: 1 <span id="cr-fx-cur">USD</span> ≈ <span id="cr-fx-rate">360</span> Ft
         </div>
         <div style="font-size:11px;color:var(--muted);margin-bottom:10px">A teljes nevet és az élő árfolyamot a rendszer a coin szimbóluma alapján automatikusan lekéri (CoinGecko).</div>
-        <button class="btn" onclick="addCryptoTrade()" style="width:100%">+ Vétel rögzítése</button>
+        <button class="btn" id="crypto-submit-btn" onclick="addCryptoTrade()" style="width:100%">+ Vétel rögzítése</button>
       </div>
     </div>
   </div>
@@ -403,7 +403,7 @@
 <div class="tab-content" id="tab-gold">
   <div class="section-header">
     <div class="section-title">Fizikai Arany</div>
-    <button class="btn" onclick="openModal('gold-modal')">+ Aranytétel rögzítése</button>
+    <button class="btn" onclick="openGoldAdd()">+ Aranytétel rögzítése</button>
   </div>
 
   <div>
@@ -474,7 +474,7 @@
       <div class="modal" id="gold-modal" onclick="if(event.target===this)closeModal('gold-modal')">
         <div class="modal-card">
           <div class="modal-head">
-            <div class="section-title" style="font-size:18px">Aranytétel hozzáadása</div>
+            <div class="section-title" style="font-size:18px" id="gold-modal-title">Aranytétel hozzáadása</div>
             <button class="btn btn-secondary btn-sm" onclick="closeModal('gold-modal')">✕</button>
           </div>
           <div class="form-grid fg2" style="margin-bottom:12px">
@@ -518,7 +518,7 @@
             <input type="text" inputmode="numeric" id="gd-cost" placeholder="0" oninput="formatThousands(this)">
           </div>
         </div>
-        <button class="btn" onclick="addGold()" style="width:100%">+ Hozzáadás</button>
+        <button class="btn" id="gold-submit-btn" onclick="addGold()" style="width:100%">+ Hozzáadás</button>
       </div>
     </div>
   </div>
@@ -527,7 +527,7 @@
 <div class="tab-content" id="tab-pledge">
   <div class="section-header">
     <div class="section-title">Zálog (arany fedezetű kölcsön)</div>
-    <button class="btn" id="pledge-add-btn" onclick="openModal('pledge-modal')">+ Zálogba adás</button>
+    <button class="btn" id="pledge-add-btn" onclick="openPledgeAdd()">+ Zálogba adás</button>
   </div>
 
   <div>
@@ -566,11 +566,11 @@
       <div class="modal" id="pledge-modal" onclick="if(event.target===this)closeModal('pledge-modal')">
         <div class="modal-card">
           <div class="modal-head">
-            <div class="section-title" style="font-size:18px">Zálogba adás</div>
+            <div class="section-title" style="font-size:18px" id="pledge-modal-title">Zálogba adás</div>
             <button class="btn btn-secondary btn-sm" onclick="closeModal('pledge-modal')">✕</button>
           </div>
           <div class="form-grid fg2" style="margin-bottom:12px">
-          <div>
+          <div id="pl-gold-wrap">
             <label>Aranytétel(ek) — fedezet (több is választható)</label>
             <details class="pl-gold-dd">
               <summary id="pl-gold-summary"><span class="pl-gold-summary-text">Válassz aranytételt…</span></summary>
@@ -616,7 +616,7 @@
           <div id="pl-end-info" style="font-size:11px;color:var(--muted);align-self:center"></div>
           <div id="pl-net-info" style="font-size:11px;color:var(--accent2);grid-column:1/-1"></div>
         </div>
-        <button class="btn" onclick="addPledge()" style="width:100%">+ Zálogba adás</button>
+        <button class="btn" id="pledge-submit-btn" onclick="addPledge()" style="width:100%">+ Zálogba adás</button>
       </div>
     </div>
   </div>
@@ -727,7 +727,7 @@
 <div class="tab-content" id="tab-services">
   <div class="section-header">
     <div class="section-title">Rendszeres Szolgáltatások</div>
-    <button class="btn" onclick="openModal('service-modal')">+ Szolgáltatás rögzítése</button>
+    <button class="btn" onclick="openServiceAdd()">+ Szolgáltatás rögzítése</button>
   </div>
 
   <div class="grid g4" style="margin-bottom:16px">
@@ -765,7 +765,7 @@
     <div class="modal" id="service-modal" onclick="if(event.target===this)closeModal('service-modal')">
       <div class="modal-card">
         <div class="modal-head">
-          <div class="section-title" style="font-size:18px">Szolgáltatás rögzítése</div>
+          <div class="section-title" style="font-size:18px" id="service-modal-title">Szolgáltatás rögzítése</div>
           <button class="btn btn-secondary btn-sm" onclick="closeModal('service-modal')">✕</button>
         </div>
         <div class="form-grid fg2" style="margin-bottom:12px">
@@ -809,7 +809,7 @@
             <input type="number" id="sv-day" placeholder="pl. 5" min="1" max="31">
           </div>
         </div>
-        <button class="btn" onclick="addService()" style="width:100%">+ Hozzáadás</button>
+        <button class="btn" id="service-submit-btn" onclick="addService()" style="width:100%">+ Hozzáadás</button>
       </div>
     </div>
 
@@ -913,6 +913,43 @@
           <label class="mod-toggle"><input type="checkbox" id="mod-services" onchange="updateModules()"><span>Szolgáltatások</span></label>
         </div>
         <div id="acc-mod-msg" style="min-height:18px;font-size:12px;margin-top:10px"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Téma</div>
+        <p style="color:var(--muted);font-size:12px;margin-bottom:16px;line-height:1.6">
+          Válaszd ki az alkalmazás stílusát. A témák nemcsak a színvilágot, hanem az elrendezést is megváltoztatják — a csempék formáját, a sűrűséget és a betűtípust. Mindegyiknek van nappali és éjszakai változata.
+        </p>
+        <div class="theme-grid" style="margin-bottom:16px">
+          <label class="theme-opt"><input type="radio" name="theme-opt" value="forest" onchange="updateTheme('forest')"><span class="theme-dot theme-dot-forest"></span><span>Klasszikus<small>kártyás · zöld</small></span></label>
+          <label class="theme-opt"><input type="radio" name="theme-opt" value="ocean" onchange="updateTheme('ocean')"><span class="theme-dot theme-dot-ocean"></span><span>Kompakt<small>sűrű · kék</small></span></label>
+          <label class="theme-opt"><input type="radio" name="theme-opt" value="sunset" onchange="updateTheme('sunset')"><span class="theme-dot theme-dot-sunset"></span><span>Lágy<small>levegős · terrakotta</small></span></label>
+          <label class="theme-opt"><input type="radio" name="theme-opt" value="graphite" onchange="updateTheme('graphite')"><span class="theme-dot theme-dot-graphite"></span><span>Kontúros<small>lapos · grafit</small></span></label>
+          <label class="theme-opt"><input type="radio" name="theme-opt" value="lavender" onchange="updateTheme('lavender')"><span class="theme-dot theme-dot-lavender"></span><span>Terminál<small>monospace · levendula</small></span></label>
+        </div>
+        <div class="form-grid fg2">
+          <div>
+            <label>Megjelenés</label>
+            <select id="ui-appearance" onchange="updateAppearance()">
+              <option value="auto">Automatikus (napszak szerint)</option>
+              <option value="light">Mindig világos</option>
+              <option value="dark">Mindig sötét</option>
+            </select>
+          </div>
+        </div>
+        <div id="acc-theme-msg" style="min-height:18px;font-size:12px;margin-top:10px"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Műveleti gombok</div>
+        <p style="color:var(--muted);font-size:12px;margin-bottom:16px;line-height:1.6">
+          Kapcsold ki a szerkesztés vagy a törlés gombokat, ha védeni szeretnéd az adataidat a véletlen módosítástól vagy törléstől. A gombok bármikor visszakapcsolhatók.
+        </p>
+        <div class="form-grid fg2" style="gap:10px">
+          <label class="mod-toggle"><input type="checkbox" id="ui-edit-btns" onchange="updateActionButtons()"><span>Szerkesztés gombok</span></label>
+          <label class="mod-toggle"><input type="checkbox" id="ui-del-btns" onchange="updateActionButtons()"><span>Törlés gombok</span></label>
+        </div>
+        <div id="acc-ui-msg" style="min-height:18px;font-size:12px;margin-top:10px"></div>
       </div>
 
       <div class="card">
